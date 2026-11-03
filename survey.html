@@ -221,11 +221,28 @@ function analyze(answers) {
   });
 }
 
+function josa(word) { const c = word.charCodeAt(word.length - 1) - 0xAC00; return c >= 0 && c % 28 ? "은" : "는"; }
+
+// 다섯 성향을 합쳐 종합 설명 만들기
+function overallText(by) {
+  const t = by.time.side === "left", c = by.clean.side === "left", q = by.sound.side === "left", h = by.stay.side === "left", i = by.social.side === "left";
+  const s1 = (t ? "일찍 자고 일찍 일어나는 규칙적인 생활을 하고, " : "밤늦게까지 깨어 있는 생활에 익숙하고, ")
+           + (c ? "방은 늘 깔끔하게 정리해 두는 편이에요." : "정리에는 크게 얽매이지 않고 편하게 지내는 편이에요.");
+  const s2 = (q ? "방에서는 조용히 지내는 걸 좋아하고 생활 소음에 민감한 편이며, " : "방에서 통화나 음악처럼 소리를 내는 일이 많은 편이며, ")
+           + (h ? "수업이 없을 때는 대부분 방에서 시간을 보내요." : "도서관이나 카페, 본가 등 밖에서 지내는 시간이 많아요.");
+  const s3 = i ? "룸메이트와는 적당한 거리를 두고 서로의 생활을 존중하는 관계를 원해요." : "룸메이트와 밥도 같이 먹고 이야기도 나누는 친한 관계를 원해요.";
+  const s4 = `그래서 나처럼 ${by.time.pole.label}이면서 ${c ? "깔끔하고" : "정리에 너그럽고"} ${q ? "조용한" : "소리에 너그러운"} 룸메이트와 가장 잘 맞아요.`;
+  const soft = Object.values(by).filter(x => x.pct < 60).map(x => x.a.name);
+  const s5 = soft.length ? `${soft.join(", ")}${josa(soft[soft.length - 1])} 한쪽으로 크게 치우치지 않아서 상대에 맞춰 조절하기 쉬운 편이에요.` : "";
+  return [s1, s2, s3, s4, s5].filter(Boolean).join(" ");
+}
+
 function renderResult(answers, info, isSample) {
   const res = analyze(answers);
   const by = Object.fromEntries(res.map(x => [x.a.key, x]));
   const code = res.slice(0, 4).map(x => x.pole.code).join("") + "-" + res[4].pole.code;
   const labels = res.map(x => x.pole.label).join(" · ");
+  const overall = overallText(by);
   const infoChips = [info.smoke, `코골이·잠버릇 ${info.snore}`, `방 온도 ${info.temp}`, `방에서 음식 ${info.food}`];
 
   $("#result").innerHTML = `
@@ -236,6 +253,7 @@ function renderResult(answers, info, isSample) {
         <div class="code" aria-label="유형 코드 ${code}: ${labels}">
           ${res.map((x, k) => `${k === 4 ? `<div class="dash" aria-hidden="true">-</div>` : ""}<div class="letter" style="--dc:${x.a.color}"><span>${x.pole.code}</span><small>${x.pole.label}</small></div>`).join("")}
         </div>
+        <div class="overall"><b>종합 설명</b><p>${overall}</p></div>
         <div class="chips">${infoChips.map(c => `<span class="chip">${esc(c)}</span>`).join("")}</div>
       </div>
     </section>
