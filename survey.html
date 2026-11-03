@@ -107,11 +107,18 @@ const QUESTIONS = [
   { axis: "social", dir:  1, text: "룸메이트와 고민 이야기도 나눌 수 있으면 좋겠다." },
 ];
 
+const INFO = [
+  { key: "smoke", label: "흡연 여부", options: ["비흡연", "흡연"] },
+  { key: "snore", label: "코골이·잠버릇", options: ["없음", "조금 있음", "있음"] },
+  { key: "temp",  label: "선호하는 방 온도", options: ["시원하게", "보통", "따뜻하게"] },
+  { key: "food",  label: "방에서 음식 먹기", options: ["괜찮음", "환기하면 괜찮음", "간단한 것만", "싫음"] },
+];
+
 const $ = s => document.querySelector(s);
 
 const PER_PAGE = 5;
 const QPAGES = Math.ceil(QUESTIONS.length / PER_PAGE);
-const TOTAL_STEPS = QPAGES;
+const TOTAL_STEPS = QPAGES + 1;
 // '보통' 없이 6단계: 어느 쪽이든 반드시 기울도록 함
 const LIKERT = ["매우 아니다", "아니다", "약간 아니다", "약간 그렇다", "그렇다", "매우 그렇다"];
 
@@ -137,7 +144,7 @@ function renderIntro() {
 
 function updateBar() {
   const done = Object.keys(state.answers).length + Object.keys(state.info).length;
-  $("#barFill").style.width = `${Math.round(done / (QUESTIONS.length) * 100)}%`;
+  $("#barFill").style.width = `${Math.round(done / (QUESTIONS.length + INFO.length) * 100)}%`;
 }
 
 function renderStep() {
@@ -161,6 +168,13 @@ function renderStep() {
           <span class="end yes">그렇다</span>
           <div class="ends-mobile"><span class="no">아니다</span><span class="yes">그렇다</span></div>
         </div>
+      </div>`).join("");
+  } else {
+    $("#stepName").textContent = "생활 정보";
+    $("#stepBody").innerHTML = INFO.map(f => `
+      <div class="q ${state.info[f.key] ? "done" : ""}" data-info="${f.key}">
+        <div class="qtext">${f.label}</div>
+        <div class="seg">${f.options.map((o, j) => `<label><input type="radio" id="i-${f.key}-${j}" name="i-${f.key}" value="${o}" ${state.info[f.key] === o ? "checked" : ""}><span>${o}</span></label>`).join("")}</div>
       </div>`).join("");
   }
 
