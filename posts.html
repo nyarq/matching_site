@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2bae7e">
+  <title>룸메이트 구하기 | 기숙사 성향 매칭</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Jua&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --brand: #218d68;
+      --brand-dark: #17694d;
+      --brand-soft: #e8f7ef;
+      --ink: #1b2925;
+      --muted: #687b72;
+      --line: #e4ebe6;
+      --page: #f5f8f6;
+      --card: #fff;
+      --danger: #bc4242;
+      font-family: "IBM Plex Sans KR", system-ui, sans-serif;
+      font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--page); }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .5; }
+    :focus-visible { outline: 3px solid #79c7a6; outline-offset: 2px; }
+    .shell { width: min(100% - 32px, 1000px); margin: 0 auto; }
+    .site-header { background: white; border-bottom: 1px solid var(--line); }
+    .header-inner { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; color: white; background: var(--brand); font: 23px "Jua", sans-serif; }
+    .brand b { font-size: 18px; letter-spacing: -.6px; }
+    .brand small { display: block; color: var(--muted); font-size: 11px; font-weight: 500; margin-top: 2px; }
+    .header-label { color: var(--brand-dark); background: var(--brand-soft); padding: 7px 12px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+    .hero { padding: 45px 0 30px; display: flex; justify-content: space-between; align-items: end; gap: 24px; }
+    .eyebrow { color: var(--brand); font-size: 13px; font-weight: 700; letter-spacing: .3px; }
+    h1 { font: 39px/1.2 "Jua", sans-serif; letter-spacing: -1px; margin: 12px 0; }
+    .hero p { margin: 0; color: var(--muted); line-height: 1.7; font-size: 14px; }
+    .primary, .secondary, .soft-button { border: 0; border-radius: 11px; font-weight: 700; transition: background-color .15s, transform .15s; }
+    .primary { background: var(--brand); color: white; padding: 13px 20px; white-space: nowrap; }
+    .primary:hover { background: var(--brand-dark); }
+    .secondary { background: #f0f4f1; color: var(--ink); padding: 12px 17px; }
+    .secondary:hover { background: #e4ece6; }
+    .soft-button { background: var(--brand-soft); color: var(--brand-dark); padding: 9px 12px; font-size: 12px; }
+    .soft-button:hover { background: #d7f1e3; }
+    .toolbar { background: white; border: 1px solid var(--line); border-radius: 16px; padding: 17px; display: grid; grid-template-columns: minmax(180px, 1fr) 190px 140px; gap: 10px; box-shadow: 0 7px 25px #24493606; }
+    .field { display: flex; flex-direction: column; gap: 7px; }
+    .field label { font-size: 12px; color: var(--muted); font-weight: 700; }
+    .control { border: 1px solid #d9e3dc; border-radius: 10px; width: 100%; min-height: 43px; padding: 10px 12px; background: white; color: var(--ink); outline: none; }
+    .control:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+    textarea.control { min-height: 150px; line-height: 1.7; resize: vertical; }
+    .board { margin: 25px 0 70px; border: 1px solid var(--line); background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 40px #24493608; }
+    .board-head { display: flex; justify-content: space-between; align-items: center; gap: 15px; padding: 19px 24px; border-bottom: 1px solid var(--line); }
+    .board-head h2 { font-size: 17px; margin: 0; }
+    .board-head span { font-size: 13px; color: var(--muted); }
+    .post-row { display: block; border: 0; border-bottom: 1px solid var(--line); background: white; padding: 21px 24px; width: 100%; text-align: left; color: inherit; }
+    .post-row:last-child { border-bottom: 0; }
+    .post-row:hover, .post-row:focus-visible { background: #f9fcfa; }
+    .post-top, .post-bottom { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+    .tag { display: inline-flex; padding: 5px 9px; border-radius: 7px; background: #edf6f0; color: #247451; font-size: 11px; font-weight: 700; }
+    .tag.closed { background: #f0f1f0; color: #748079; }
+    .tag.own { color: #7954a5; background: #f5effc; }
+    .post-title { margin: 11px 0 5px; font-weight: 700; font-size: 16px; line-height: 1.5; }
+    .post-snippet { color: #66786f; font-size: 13px; line-height: 1.6; margin: 0 0 13px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .post-bottom { color: #8a9890; font-size: 11px; }
+    .post-bottom .separator::before { content: "·"; margin-right: 8px; }
+    .empty { padding: 74px 20px; text-align: center; }
+    .empty-icon { font-size: 36px; margin-bottom: 10px; }
+    .empty h3 { margin: 0 0 8px; }
+    .empty p { margin: 0; color: var(--muted); font-size: 13px; }
+    .demo-note { display: flex; align-items: flex-start; gap: 9px; font-size: 12px; color: #69776f; margin: 15px 4px 0; line-height: 1.7; }
+    .demo-note strong { color: var(--brand-dark); }
+    dialog { border: none; border-radius: 18px; padding: 0; width: min(94vw, 590px); max-height: min(88vh, 820px); box-shadow: 0 30px 80px #0b251c3b; color: var(--ink); }
+    dialog::backdrop { background: #10231e8a; backdrop-filter: blur(3px); }
+    .dialog-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 21px 25px; border-bottom: 1px solid var(--line); }
+    .dialog-head h2 { font-size: 19px; margin: 0; }
+    .icon-button { width: 34px; height: 34px; border: 0; border-radius: 50%; background: #f1f5f2; font-size: 19px; line-height: 1; color: var(--muted); }
+    .dialog-content { padding: 25px; overflow-y: auto; max-height: calc(88vh - 75px); }
+    .post-form { display: grid; gap: 17px; }
+    .post-form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .hint { font-size: 11px; color: var(--muted); margin: 0; line-height: 1.6; }
+    .actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+    .detail-title { margin: 14px 0 9px; font-size: 25px; line-height: 1.4; }
+    .detail-meta { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+    .detail-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.9; font-size: 14px; min-height: 90px; padding: 22px 0; }
+    .detail-actions { display: flex; justify-content: flex-end; gap: 9px; padding-top: 15px; border-top: 1px solid var(--line); }
+    .danger { color: var(--danger); }
+    .hidden { display: none !important; }
+    @media (max-width: 640px) {
+      .shell { width: min(100% - 24px, 1000px); }
+      .hero { align-items: stretch; flex-direction: column; padding-top: 33px; }
+      h1 { font-size: 34px; }
+      .hero .primary { width: 100%; }
+      .toolbar { grid-template-columns: 1fr 1fr; }
+      .toolbar .field:first-child { grid-column: 1 / -1; }
+      .post-row { padding: 19px; }
+      .board-head { padding: 17px 19px; }
+      .post-form .two { grid-template-columns: 1fr; }
+      .dialog-head, .dialog-content { padding-left: 19px; padding-right: 19px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; } }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="shell header-inner">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">룸</div>
+        <div><b>기숙사 성향 매칭</b><small>나에게 맞는 룸메이트 찾기</small></div>
+      </div>
+      <span class="header-label">룸메이트 게시판</span>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">ROOMMATE COMMUNITY</div>
+        <h1>함께 지낼 룸메이트를 찾아요</h1>
+        <p>생활관별 모집 글을 살펴보고, 나와 잘 맞는 룸메이트를 찾아보세요.</p>
+      </div>
+      <button class="primary" id="openCreate" type="button">+ 글쓰기</button>
+    </section>
+
+    <section class="toolbar" aria-label="게시글 검색 및 필터">
+      <div class="field">
+        <label for="search">게시글 검색</label>
+        <input class="control" id="search" type="search" placeholder="제목이나 내용으로 검색" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="dormFilter">생활관</label>
+        <select class="control" id="dormFilter"><option value="">전체 생활관</option></select>
+      </div>
+      <div class="field">
+        <label for="statusFilter">모집 상태</label>
+        <select class="control" id="statusFilter">
+          <option value="open">모집 중</option>
+          <option value="all">전체</option>
+          <option value="closed">모집 마감</option>
+        </select>
+      </div>
+    </section>
+
+    <p class="demo-note"><span aria-hidden="true">ⓘ</span><span><strong>개발용 시연 페이지</strong>입니다. 게시글은 현재 이 브라우저에만 저장되며, 실제 공유를 위한 Firebase 연결은 추후 진행합니다. 아래 기본 게시글은 예시입니다.</span></p>
+
+    <section class="board" aria-labelledby="boardTitle">
+      <div class="board-head">
+        <h2 id="boardTitle">룸메이트 구하기</h2>
+        <span id="postCount" aria-live="polite"></span>
+      </div>
+      <div id="postList"></div>
+      <div class="empty hidden" id="emptyState">
+        <div class="empty-icon" aria-hidden="true">🏠</div>
+        <h3>조건에 맞는 게시글이 없어요</h3>
+        <p>다른 생활관을 선택하거나 새 글을 작성해 보세요.</p>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="formDialog" aria-labelledby="formHeading">
+    <div class="dialog-head">
+      <h2 id="formHeading">새 모집 글 작성</h2>
+      <button class="icon-button" type="button" data-close="formDialog" aria-label="닫기">×</button>
+    </div>
+    <div class="dialog-content">
+      <form class="post-form" id="postForm">
+        <div class="field">
+          <label for="title">제목 *</label>
+          <input class="control" id="title" name="title" maxlength="60" required placeholder="예: 101동 조용한 룸메이트 구합니다">
+        </div>
+        <div class="two">
+          <div class="field">
+            <label for="dorm">생활관 *</label>
+            <select class="control" id="dorm" name="dorm" required><option value="">선택해주세요</option></select>
+          </div>
+          <div class="field">
+            <label for="status">모집 상태</label>
+            <select class="control" id="status" name="status">
+              <option value="open">모집 중</option>
+              <option value="closed">모집 마감</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="bodyText">내용 *</label>
+          <textarea class="control" id="bodyText" name="body" maxlength="1500" required placeholder="생활 시간, 청결 습관, 소음 등 함께 지낼 룸메이트에게 알려주고 싶은 내용을 적어주세요."></textarea>
+        </div>
+        <div class="field">
+          <label for="typeCode">성향 검사 유형 코드 (선택)</label>
+          <input class="control" id="typeCode" name="typeCode" maxlength="6" pattern="[a-zA-Z]{4}-[a-zA-Z]" placeholder="예: MCQH-I" autocapitalize="characters">
+          <p class="hint">설문 결과의 유형 코드를 적을 수 있어요. 이미지 첨부와 자동 연동은 Firebase 연결 후 팀원과 협의할 예정입니다.</p>
+        </div>
+        <div class="actions">
+          <button class="secondary" type="button" data-close="formDialog">취소</button>
+          <button class="primary" type="submit" id="submitPost">게시하기</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog id="detailDialog" aria-labelledby="detailTitle">
+    <div class="dialog-head">
+      <h2>게시글 상세</h2>
+      <button class="icon-button" type="button" data-close="detailDialog" aria-label="닫기">×</button>
+    </div>
+    <div class="dialog-content">
+      <div id="detailTags" class="post-top"></div>
+      <h2 class="detail-title" id="detailTitle"></h2>
+      <div class="detail-meta" id="detailMeta"></div>
+      <div class="detail-body" id="detailBody"></div>
+      <div class="detail-actions">
+        <button class="secondary hidden" type="button" id="deletePost"><span class="danger">삭제</span></button>
+        <button class="secondary hidden" type="button" id="editPost">수정</button>
+        <button class="secondary" type="button" data-close="detailDialog">닫기</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script>
+    "use strict";
+
+    // Keep the dormitory labels in sync with survey.html when pages are integrated.
+    const DORMS = [
+      "101동 해울관", "102동 예지관", "103동 예솔관",
+      "104동 다솔관", "105동 함지관", "106동 한울관",
+      "201동 솔빛관", "202동 청솔관", "203동 IH관",
+      "204동 은솔관", "205동 참빛관"
+    ];
+    const STORAGE_KEY = "roommate-posts-demo-v1";
+    // This ID simulates the authenticated user. Replace with Firebase Auth UID.
+    const DEMO_USER_ID = "local-demo-user";
+    const SAMPLE_POSTS = [
+      {
+        id: "sample-1", authorId: "sample-student-1", authorName: "익명 학생",
+        dorm: DORMS[0], status: "open", typeCode: "MCQH-I",
+        title: "101동 조용한 룸메이트 구합니다!",
+        body: "밤 11~12시쯤 잠들고 아침에 일찍 일어나는 편입니다.\n비흡연이고 방은 깔끔하게 쓰는 걸 좋아해요.\n비슷한 생활 패턴의 룸메이트를 찾습니다.",
+        createdAt: "2026-11-03T09:20:00+09:00", updatedAt: null
+      },
+      {
+        id: "sample-2", authorId: "sample-student-2", authorName: "익명 학생",
+        dorm: DORMS[6], status: "open", typeCode: "NFLH-T",
+        title: "201동 게임 좋아하는 룸메 찾아요 🎮",
+        body: "게임을 좋아하지만 밤에는 이어폰을 사용합니다.\n방에서 편하게 대화하면서 지낼 분이면 좋겠어요.",
+        createdAt: "2026-11-02T15:35:00+09:00", updatedAt: null
+      },
+      {
+        id: "sample-3", authorId: "sample-student-3", authorName: "익명 학생",
+        dorm: DORMS[8], status: "open", typeCode: "MCQO-I",
+        title: "IH관 깔끔한 룸메이트 찾습니다",
+        body: "비흡연이고 늦은 밤에는 조용한 환경을 선호합니다.\n서로 개인 시간을 존중하며 지내고 싶어요.",
+        createdAt: "2026-11-01T11:10:00+09:00", updatedAt: null
+      },
+      {
+        id: "sample-4", authorId: "sample-student-4", authorName: "익명 학생",
+        dorm: DORMS[1], status: "closed", typeCode: "",
+        title: "102동 룸메이트 모집 마감했습니다",
+        body: "관심 가져주셔서 감사합니다. 좋은 룸메이트를 찾았어요!",
+        createdAt: "2026-10-30T18:45:00+09:00", updatedAt: null
+      }
+    ];
+
+    const byId = id => document.getElementById(id);
+    const copyPost = post => ({ ...post });
+    const readPosts = () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw === null) return SAMPLE_POSTS.map(copyPost);
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.filter(p => p && typeof p.id === "string");
+      } catch (error) { console.warn("저장된 게시글을 불러오지 못했습니다.", error); }
+      return SAMPLE_POSTS.map(copyPost);
+    };
+    let posts = readPosts();
+    let editingId = null;
+    let activePostId = null;
+
+    function savePosts() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+        return true;
+      } catch (error) {
+        alert("브라우저 저장 공간을 사용할 수 없습니다. 변경 사항이 새로고침 후 사라질 수 있어요.");
+        return false;
+      }
+    }
+
+    function addTag(container, label, style) {
+      const tag = document.createElement("span");
+      tag.className = "tag" + (style ? " " + style : "");
+      tag.textContent = label;
+      container.appendChild(tag);
+    }
+
+    function formatDate(iso) {
+      const date = new Date(iso);
+      if (Number.isNaN(date.getTime())) return "날짜 없음";
+      return new Intl.DateTimeFormat("ko-KR", {
+        year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit"
+      }).format(date);
+    }
+
+    function renderPosts() {
+      const search = byId("search").value.trim().toLocaleLowerCase("ko-KR");
+      const dorm = byId("dormFilter").value;
+      const status = byId("statusFilter").value;
+      const filtered = posts.filter(post => {
+        const matchesSearch = !search || (post.title + " " + post.body).toLocaleLowerCase("ko-KR").includes(search);
+        return matchesSearch && (!dorm || post.dorm === dorm) && (status === "all" || post.status === status);
+      }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      byId("postCount").textContent = filtered.length + "개의 게시글";
+      byId("postList").replaceChildren();
+      byId("emptyState").classList.toggle("hidden", filtered.length !== 0);
+
+      filtered.forEach(post => {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "post-row";
+        row.setAttribute("aria-label", post.title + " 상세보기");
+        const tags = document.createElement("div");
+        tags.className = "post-top";
+        addTag(tags, post.dorm || "생활관 미정");
+        addTag(tags, post.status === "closed" ? "모집 마감" : "모집 중", post.status === "closed" ? "closed" : "");
+        if (post.authorId === DEMO_USER_ID) addTag(tags, "내 글", "own");
+        const title = document.createElement("div");
+        title.className = "post-title";
+        title.textContent = post.title || "(제목 없음)";
+        const snippet = document.createElement("p");
+        snippet.className = "post-snippet";
+        snippet.textContent = post.body || "";
+        const bottom = document.createElement("div");
+        bottom.className = "post-bottom";
+        [post.authorName || "익명 학생", formatDate(post.createdAt), post.typeCode ? "성향 " + post.typeCode : ""].filter(Boolean).forEach((item, index) => {
+          const span = document.createElement("span");
+          span.textContent = item;
+          if (index > 0) span.className = "separator";
+          bottom.appendChild(span);
+        });
+        row.append(tags, title, snippet, bottom);
+        row.addEventListener("click", () => showDetail(post.id));
+        byId("postList").appendChild(row);
+      });
+    }
+
+    function openEditor(post) {
+      editingId = post ? post.id : null;
+      byId("postForm").reset();
+      byId("formHeading").textContent = post ? "모집 글 수정" : "새 모집 글 작성";
+      byId("submitPost").textContent = post ? "수정 완료" : "게시하기";
+      if (post) {
+        byId("title").value = post.title;
+        byId("dorm").value = post.dorm;
+        byId("status").value = post.status;
+        byId("bodyText").value = post.body;
+        byId("typeCode").value = post.typeCode || "";
+      }
+      byId("formDialog").showModal();
+      byId("title").focus();
+    }
+
+    function showDetail(id) {
+      const post = posts.find(p => p.id === id);
+      if (!post) return;
+      activePostId = id;
+      const tags = byId("detailTags");
+      tags.replaceChildren();
+      addTag(tags, post.dorm || "생활관 미정");
+      addTag(tags, post.status === "closed" ? "모집 마감" : "모집 중", post.status === "closed" ? "closed" : "");
+      if (post.typeCode) addTag(tags, "성향 " + post.typeCode);
+      byId("detailTitle").textContent = post.title;
+      byId("detailMeta").textContent = (post.authorName || "익명 학생") + " · " + formatDate(post.createdAt) + (post.updatedAt ? " · 수정됨" : "");
+      byId("detailBody").textContent = post.body;
+      const own = post.authorId === DEMO_USER_ID;
+      byId("editPost").classList.toggle("hidden", !own);
+      byId("deletePost").classList.toggle("hidden", !own);
+      byId("detailDialog").showModal();
+    }
+
+    DORMS.forEach(dorm => {
+      ["dorm", "dormFilter"].forEach(id => {
+        const option = document.createElement("option");
+        option.value = dorm;
+        option.textContent = dorm;
+        byId(id).appendChild(option);
+      });
+    });
+
+    byId("openCreate").addEventListener("click", () => openEditor(null));
+    ["search", "dormFilter", "statusFilter"].forEach(id =>
+      byId(id).addEventListener(id === "search" ? "input" : "change", renderPosts)
+    );
+    document.querySelectorAll("[data-close]").forEach(button =>
+      button.addEventListener("click", () => byId(button.dataset.close).close())
+    );
+    ["formDialog", "detailDialog"].forEach(id => {
+      const dialog = byId(id);
+      dialog.addEventListener("click", event => {
+        if (event.target === dialog) dialog.close();
+      });
+    });
+
+    byId("postForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const title = byId("title").value.trim();
+      const dorm = byId("dorm").value;
+      const body = byId("bodyText").value.trim();
+      const status = byId("status").value;
+      const typeCode = byId("typeCode").value.trim().toUpperCase();
+      if (!title || !body || !DORMS.includes(dorm)) {
+        alert("제목, 생활관, 내용을 올바르게 입력해 주세요.");
+        return;
+      }
+      if (typeCode && !/^[A-Z]{4}-[A-Z]$/.test(typeCode)) {
+        alert("성향 코드는 MCQH-I와 같은 형식으로 입력해 주세요.");
+        return;
+      }
+
+      if (editingId) {
+        const post = posts.find(p => p.id === editingId);
+        if (!post || post.authorId !== DEMO_USER_ID) return;
+        Object.assign(post, { title, dorm, body, status, typeCode, updatedAt: new Date().toISOString() });
+      } else {
+        posts.unshift({
+          id: (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "post-" + Date.now()),
+          authorId: DEMO_USER_ID, authorName: "나 (시연 사용자)",
+          title, dorm, body, status, typeCode,
+          createdAt: new Date().toISOString(), updatedAt: null
+        });
+      }
+      savePosts();
+      byId("formDialog").close();
+      renderPosts();
+    });
+
+    byId("editPost").addEventListener("click", () => {
+      const post = posts.find(p => p.id === activePostId);
+      if (!post || post.authorId !== DEMO_USER_ID) return;
+      byId("detailDialog").close();
+      openEditor(post);
+    });
+    byId("deletePost").addEventListener("click", () => {
+      const post = posts.find(p => p.id === activePostId);
+      if (!post || post.authorId !== DEMO_USER_ID) return;
+      if (!confirm("이 게시글을 삭제하시겠습니까?")) return;
+      posts = posts.filter(p => p.id !== post.id);
+      savePosts();
+      byId("detailDialog").close();
+      renderPosts();
+    });
+    renderPosts();
+  </script>
+</body>
+</html>
