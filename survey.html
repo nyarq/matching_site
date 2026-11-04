@@ -274,7 +274,12 @@ const QUESTIONS = [
   { axis: "social", dir:  1, text: "룸메이트와 고민 이야기도 나눌 수 있으면 좋겠다." },
 ];
 
+// 생활관 목록 (학교 캠퍼스맵 기준). 생활관이 남녀로 나뉘어 있어서 성별은 따로 묻지 않음
+const DORMS = ["101동 해울관", "102동 예지관", "103동 예솔관", "104동 다솔관", "105동 함지관", "106동 한울관",
+               "201동 솔빛관", "202동 청솔관", "203동 IH관", "204동 은솔관", "205동 참빛관"];
+
 const INFO = [
+  { key: "dorm",   label: "생활관", options: DORMS },
   { key: "smoke", label: "흡연 여부", options: ["비흡연", "흡연"] },
   { key: "snore", label: "코골이·잠버릇", options: ["없음", "조금 있음", "있음"] },
   { key: "temp",  label: "선호하는 방 온도", options: ["시원하게", "보통", "따뜻하게"] },
@@ -407,14 +412,14 @@ function overallText(by) {
 // 신청자 정보가 아직 저장되지 않아서 예시 후보로 추천을 보여줌.
 // r: 각 성향의 오른쪽 비율(0~100). time 저녁형, clean 여유형, sound 활발형, stay 외출형, social 함께형 쪽일수록 큼
 const CANDIDATES = [
-  { id: "후보 A", r: { time: 76, clean: 24, sound: 28, stay: 44, social: 32 }, info: { smoke: "비흡연", snore: "없음", temp: "시원하게", food: "간단한 것만" } },
-  { id: "후보 B", r: { time: 20, clean: 16, sound: 24, stay: 68, social: 40 }, info: { smoke: "비흡연", snore: "없음", temp: "보통", food: "싫음" } },
-  { id: "후보 C", r: { time: 84, clean: 72, sound: 80, stay: 36, social: 88 }, info: { smoke: "비흡연", snore: "조금 있음", temp: "따뜻하게", food: "괜찮음" } },
-  { id: "후보 D", r: { time: 64, clean: 36, sound: 44, stay: 80, social: 56 }, info: { smoke: "비흡연", snore: "없음", temp: "시원하게", food: "환기하면 괜찮음" } },
-  { id: "후보 E", r: { time: 88, clean: 28, sound: 20, stay: 24, social: 16 }, info: { smoke: "흡연", snore: "없음", temp: "보통", food: "간단한 것만" } },
-  { id: "후보 F", r: { time: 32, clean: 60, sound: 56, stay: 72, social: 76 }, info: { smoke: "비흡연", snore: "있음", temp: "따뜻하게", food: "괜찮음" } },
-  { id: "후보 G", r: { time: 72, clean: 44, sound: 32, stay: 60, social: 28 }, info: { smoke: "비흡연", snore: "있음", temp: "시원하게", food: "간단한 것만" } },
-  { id: "후보 H", r: { time: 56, clean: 20, sound: 36, stay: 28, social: 64 }, info: { smoke: "비흡연", snore: "없음", temp: "보통", food: "환기하면 괜찮음" } },
+  { id: "후보 A", r: { time: 76, clean: 24, sound: 28, stay: 44, social: 32 }, info: { dorm: "205동 참빛관", smoke: "비흡연", snore: "없음", temp: "시원하게", food: "간단한 것만" } },
+  { id: "후보 B", r: { time: 20, clean: 16, sound: 24, stay: 68, social: 40 }, info: { dorm: "205동 참빛관", smoke: "비흡연", snore: "없음", temp: "보통", food: "싫음" } },
+  { id: "후보 C", r: { time: 84, clean: 72, sound: 80, stay: 36, social: 88 }, info: { dorm: "205동 참빛관", smoke: "비흡연", snore: "조금 있음", temp: "따뜻하게", food: "괜찮음" } },
+  { id: "후보 D", r: { time: 64, clean: 36, sound: 44, stay: 80, social: 56 }, info: { dorm: "205동 참빛관", smoke: "비흡연", snore: "없음", temp: "시원하게", food: "환기하면 괜찮음" } },
+  { id: "후보 E", r: { time: 88, clean: 28, sound: 20, stay: 24, social: 16 }, info: { dorm: "205동 참빛관", smoke: "흡연", snore: "없음", temp: "보통", food: "간단한 것만" } },
+  { id: "후보 F", r: { time: 32, clean: 60, sound: 56, stay: 72, social: 76 }, info: { dorm: "204동 은솔관", smoke: "비흡연", snore: "있음", temp: "따뜻하게", food: "괜찮음" } },
+  { id: "후보 G", r: { time: 72, clean: 44, sound: 32, stay: 60, social: 28 }, info: { dorm: "104동 다솔관", smoke: "비흡연", snore: "있음", temp: "시원하게", food: "간단한 것만" } },
+  { id: "후보 H", r: { time: 56, clean: 20, sound: 36, stay: 28, social: 64 }, info: { dorm: "205동 참빛관", smoke: "비흡연", snore: "없음", temp: "보통", food: "환기하면 괜찮음" } },
 ];
 
 // 성향별 중요도(합 1). 생활 시간·청결·소리가 갈등에 가장 큰 영향을 준다고 보고 비중을 높게 둠
@@ -457,7 +462,9 @@ const TIP_TEXT = {
 };
 
 function matchWith(me, cand) {
-  if (me.info.smoke !== cand.info.smoke) return null; // 흡연 여부가 다르면 추천하지 않음
+  // 같은 생활관, 같은 흡연 여부끼리만 추천 (생활관이 남녀로 나뉘어 있어 같은 생활관이면 성별도 같음)
+  if (me.info.dorm !== cand.info.dorm) return null;
+  if (me.info.smoke !== cand.info.smoke) return null;
 
   let fit = 0;
   const fits = {};
@@ -506,7 +513,7 @@ function recommendHtml(res, info) {
   return `
         <div class="card">
           <h2>나와 잘 맞는 룸메이트 추천</h2>
-          <p class="muted">생활 시간, 청결, 소리, 방 사용, 교류 성향과 생활 정보를 비교해서 잘 맞는 순서로 추천해요.</p>
+          <p class="muted">같은 생활관 신청자 중에서 성향과 생활 정보를 비교해 잘 맞는 순서로 추천해요.</p>
           <p class="note">지금은 예시 후보 ${CANDIDATES.length}명 중에서 추천해요. 신청자 정보가 저장되면 실제 신청자 중에서 추천돼요.</p>
           <div class="recs">
             ${top.map((m, i) => `
@@ -525,7 +532,7 @@ function recommendHtml(res, info) {
               </div>
             </div>`).join("")}
           </div>
-          ${excluded ? `<p class="note">흡연 여부가 달라서 제외된 후보 ${excluded}명</p>` : ""}
+          ${excluded ? `<p class="note">생활관이나 흡연 여부가 달라서 제외된 후보 ${excluded}명</p>` : ""}
         </div>`;
 }
 
@@ -535,7 +542,7 @@ function renderResult(answers, info, isSample) {
   const code = res.slice(0, 4).map(x => x.pole.code).join("") + "-" + res[4].pole.code;
   const labels = res.map(x => x.pole.label).join(" · ");
   const overall = overallText(by);
-  const infoChips = [info.smoke, `코골이·잠버릇 ${info.snore}`, `방 온도 ${info.temp}`, `방에서 음식 ${info.food}`];
+  const infoChips = [info.dorm, info.smoke, `코골이·잠버릇 ${info.snore}`, `방 온도 ${info.temp}`, `방에서 음식 ${info.food}`];
 
   $("#result").innerHTML = `
     <section class="band">
@@ -590,7 +597,7 @@ $("#startBtn").addEventListener("click", () => { state.step = 0; show("#quiz"); 
 $("#sampleBtn").addEventListener("click", () => {
   const sample = [2,5,6,5,3, 6,5,2,4,5, 2,2,1,3,3, 3,5,6,4,5, 5,2,1,4,3];
   const ans = Object.fromEntries(sample.map((v, i) => [i, v]));
-  renderResult(ans, { smoke: "비흡연", snore: "없음", temp: "시원하게", food: "간단한 것만" }, true);
+  renderResult(ans, { dorm: "205동 참빛관", smoke: "비흡연", snore: "없음", temp: "시원하게", food: "간단한 것만" }, true);
 });
 $("#prevBtn").addEventListener("click", () => {
   if (state.step === 0) { show("#intro"); return; }
