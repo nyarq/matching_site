@@ -139,6 +139,21 @@ button { font: inherit; cursor: pointer; }
 
 .note { font-size: .85rem; color: var(--muted); }
 
+/* 룸메이트 추천 */
+.recs { display: grid; gap: 14px; }
+.rec { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: grid; gap: 10px; }
+.rec.best { border: 2px solid var(--agree); }
+.rec-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.rec-top b { font-size: 1.05rem; }
+.rec-tag { font-size: .78rem; font-weight: 700; color: var(--cta-ink); background: var(--agree); padding: 2px 8px; border-radius: 999px; }
+.rec-code { font-family: var(--font-display); letter-spacing: .04em; color: var(--muted); }
+.rec-score { margin-left: auto; font-family: var(--font-display); font-size: 1.6rem; color: var(--agree); font-weight: 400; font-variant-numeric: tabular-nums; }
+.rec-bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.rec-bar i { display: block; height: 100%; background: var(--agree); }
+.rec h4 { margin: 0; font-size: .85rem; color: var(--muted); }
+.rec ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; font-size: .93rem; }
+.rec ul.warn li::marker { color: var(--warn); }
+
 @media (max-width: 520px) {
   .scale { grid-template-columns: 1fr; gap: 8px; }
   .scale > .end { display: none; }
@@ -385,6 +400,124 @@ function overallText(by) {
   return [s1, s2, s3, s4, s5].filter(Boolean).join(" ");
 }
 
+// ---------- 룸메이트 추천 ----------
+// 신청자 정보가 아직 저장되지 않아서 예시 후보로 추천을 보여줌.
+// r: 각 성향의 오른쪽 비율(0~100). time 저녁형, clean 여유형, sound 활발형, stay 외출형, social 함께형 쪽일수록 큼
+const CANDIDATES = [
+  { id: "후보 A", r: { time: 76, clean: 24, sound: 28, stay: 44, social: 32 }, info: { smoke: "비흡연", snore: "없음", temp: "시원하게", food: "간단한 것만" } },
+  { id: "후보 B", r: { time: 20, clean: 16, sound: 24, stay: 68, social: 40 }, info: { smoke: "비흡연", snore: "없음", temp: "보통", food: "싫음" } },
+  { id: "후보 C", r: { time: 84, clean: 72, sound: 80, stay: 36, social: 88 }, info: { smoke: "비흡연", snore: "조금 있음", temp: "따뜻하게", food: "괜찮음" } },
+  { id: "후보 D", r: { time: 64, clean: 36, sound: 44, stay: 80, social: 56 }, info: { smoke: "비흡연", snore: "없음", temp: "시원하게", food: "환기하면 괜찮음" } },
+  { id: "후보 E", r: { time: 88, clean: 28, sound: 20, stay: 24, social: 16 }, info: { smoke: "흡연", snore: "없음", temp: "보통", food: "간단한 것만" } },
+  { id: "후보 F", r: { time: 32, clean: 60, sound: 56, stay: 72, social: 76 }, info: { smoke: "비흡연", snore: "있음", temp: "따뜻하게", food: "괜찮음" } },
+  { id: "후보 G", r: { time: 72, clean: 44, sound: 32, stay: 60, social: 28 }, info: { smoke: "비흡연", snore: "있음", temp: "시원하게", food: "간단한 것만" } },
+  { id: "후보 H", r: { time: 56, clean: 20, sound: 36, stay: 28, social: 64 }, info: { smoke: "비흡연", snore: "없음", temp: "보통", food: "환기하면 괜찮음" } },
+];
+
+// 성향별 중요도(합 1). 생활 시간·청결·소리가 갈등에 가장 큰 영향을 준다고 보고 비중을 높게 둠
+const AX = Object.fromEntries(AXES.map(a => [a.key, a]));
+
+const WEIGHTS = { time: 0.3, clean: 0.25, sound: 0.25, stay: 0.1, social: 0.1 };
+
+function sideOf(r) { return r >= 50 ? "right" : "left"; }
+function codeOf(r) {
+  const c = AXES.map(a => a[sideOf(r[a.key])].code);
+  return c.slice(0, 4).join("") + "-" + c[4];
+}
+
+// 두 사람의 한 성향이 얼마나 잘 맞는지(0~1)
+function axisFit(key, mine, theirs) {
+  if (key === "stay") {
+    // 방 사용은 둘 다 방순이형일 때만 부딪힘(한 명이라도 외출형이면 방을 여유롭게 씀)
+    if (mine < 50 && theirs < 50) return 1 - ((50 - mine) + (50 - theirs)) / 100;
+    return 1;
+  }
+  return 1 - Math.abs(mine - theirs) / 100;
+}
+
+const GOOD_TEXT = {
+  time:   l => `둘 다 ${l}이라 자고 일어나는 시간이 비슷해요`,
+  clean:  l => `정리하는 기준이 비슷해요 (둘 다 ${l})`,
+  sound:  l => `둘 다 ${l}이라 소리 때문에 부딪힐 일이 적어요`,
+  social: l => `룸메이트와 지내는 거리감이 비슷해요 (둘 다 ${l})`,
+};
+const TIP_TEXT = {
+  time: "소등 시간과 스탠드 사용을 미리 정해두세요",
+  clean: "청소 당번과 쓰레기 버리는 날을 정해두세요",
+  sound: "통화나 스피커 사용 규칙을 정해두세요",
+  social: "서로 원하는 거리감을 미리 이야기해 두세요",
+};
+
+function matchWith(me, cand) {
+  if (me.info.smoke !== cand.info.smoke) return null; // 흡연 여부가 다르면 추천하지 않음
+
+  let fit = 0;
+  const fits = {};
+  AXES.forEach(a => { fits[a.key] = axisFit(a.key, me.r[a.key], cand.r[a.key]); fit += WEIGHTS[a.key] * fits[a.key]; });
+
+  const good = [], warn = [];
+  let penalty = 0;
+
+  // 잘 맞는 점: 비슷한 성향 중 가장 잘 맞는 두 가지
+  ["time", "clean", "sound", "social"]
+    .filter(k => fits[k] >= 0.75 && sideOf(me.r[k]) === sideOf(cand.r[k]))
+    .sort((x, y) => fits[y] - fits[x]).slice(0, 2)
+    .forEach(k => good.push(GOOD_TEXT[k](AX[k][sideOf(me.r[k])].label)));
+  if (me.r.stay >= 50 || cand.r.stay >= 50) good.push("한 명 이상이 밖에서 지내는 시간이 많아 방을 여유롭게 쓸 수 있어요");
+
+  // 미리 정하면 좋은 점: 크게 다른 성향과 생활 정보
+  ["time", "clean", "sound", "social"].forEach(k => {
+    if (sideOf(me.r[k]) !== sideOf(cand.r[k]) && Math.abs(me.r[k] - cand.r[k]) >= 30) {
+      warn.push(`${AX[k].name}: 나는 ${AX[k][sideOf(me.r[k])].label}, 상대는 ${AX[k][sideOf(cand.r[k])].label}이에요. ${TIP_TEXT[k]}`);
+    }
+  });
+  if (me.r.stay < 50 && cand.r.stay < 50) warn.push("둘 다 방에 있는 시간이 길어요. 혼자만의 시간이 필요할 때를 정해두세요");
+  const quiet = p => p.r.sound <= 40;
+  if ((cand.info.snore === "있음" && quiet(me)) || (me.info.snore === "있음" && quiet(cand))) {
+    penalty += 8; warn.push("코골이가 있고 한 명은 소리에 민감해요. 귀마개를 챙기는 게 좋아요");
+  }
+  const temps = [me.info.temp, cand.info.temp];
+  if (temps.includes("시원하게") && temps.includes("따뜻하게")) {
+    penalty += 5; warn.push("선호하는 방 온도가 반대예요. 냉난방 온도를 미리 정해두세요");
+  }
+  const foods = [me.info.food, cand.info.food];
+  if (foods.includes("싫음") && foods.some(f => f === "괜찮음" || f === "환기하면 괜찮음")) {
+    penalty += 5; warn.push("방에서 음식 먹는 기준이 달라요. 먹어도 되는 음식과 환기 규칙을 정해두세요");
+  }
+
+  const score = Math.max(0, Math.min(99, Math.round(fit * 100 - penalty)));
+  return { cand, score, good, warn };
+}
+
+function recommendHtml(res, info) {
+  const me = { r: Object.fromEntries(res.map(x => [x.a.key, x.r])), info };
+  const all = CANDIDATES.map(c => matchWith(me, c));
+  const excluded = all.filter(m => m === null).length;
+  const top = all.filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 3);
+
+  return `
+        <div class="card">
+          <h2>나와 잘 맞는 룸메이트 추천</h2>
+          <p class="muted">생활 시간, 청결, 소리, 방 사용, 교류 성향과 생활 정보를 비교해서 잘 맞는 순서로 추천해요.</p>
+          <p class="note">지금은 예시 후보 ${CANDIDATES.length}명 중에서 추천해요. 신청자 정보가 저장되면 실제 신청자 중에서 추천돼요.</p>
+          <div class="recs">
+            ${top.map((m, i) => `
+            <div class="rec ${i === 0 ? "best" : ""}">
+              <div class="rec-top">
+                ${i === 0 ? `<span class="rec-tag">가장 잘 맞아요</span>` : ""}
+                <b>${esc(m.cand.id)}</b>
+                <span class="rec-code">${codeOf(m.cand.r)}</span>
+                <strong class="rec-score">${m.score}%</strong>
+              </div>
+              <div class="rec-bar" role="img" aria-label="잘 맞는 정도 ${m.score}%"><i style="width:${m.score}%"></i></div>
+              ${m.good.length ? `<h4>잘 맞는 점</h4><ul>${m.good.map(t => `<li>${t}</li>`).join("")}</ul>` : ""}
+              ${m.warn.length ? `<h4>미리 정하면 좋은 점</h4><ul class="warn">${m.warn.map(t => `<li>${t}</li>`).join("")}</ul>` : ""}
+            </div>`).join("")}
+          </div>
+          ${excluded ? `<p class="note">흡연 여부가 달라서 제외된 후보 ${excluded}명</p>` : ""}
+        </div>`;
+}
+
 function renderResult(answers, info, isSample) {
   const res = analyze(answers);
   const by = Object.fromEntries(res.map(x => [x.a.key, x]));
@@ -427,6 +560,7 @@ function renderResult(answers, info, isSample) {
             }).join("")}
           </div>
         </div>
+${recommendHtml(res, info)}
 
         <div class="row">
           <button class="btn ghost" id="retryBtn">${isSample ? "검사 시작하기" : "다시 검사하기"}</button>
