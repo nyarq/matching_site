@@ -153,6 +153,9 @@ button { font: inherit; cursor: pointer; }
 .rec h4 { margin: 0; font-size: .85rem; color: var(--muted); }
 .rec ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; font-size: .93rem; }
 .rec ul.warn li::marker { color: var(--warn); }
+.rec-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+a.btn { display: inline-block; text-decoration: none; text-align: center; }
+.btn.sm { padding: 9px 20px; font-size: .92rem; }
 
 @media (max-width: 520px) {
   .scale { grid-template-columns: 1fr; gap: 8px; }
@@ -417,6 +420,11 @@ const CANDIDATES = [
 // 성향별 중요도(합 1). 생활 시간·청결·소리가 갈등에 가장 큰 영향을 준다고 보고 비중을 높게 둠
 const AX = Object.fromEntries(AXES.map(a => [a.key, a]));
 
+// 채팅 페이지 주소. 채팅 페이지 담당자와 정한 파일 이름과 맞춰야 함
+// 버튼을 누르면 chat.html?with=상대ID 로 이동하고, 채팅 페이지가 with 값을 읽어 그 사람과의 채팅방을 연다
+const CHAT_PAGE = "chat.html";
+function chatLink(id) { return `${CHAT_PAGE}?with=${encodeURIComponent(id)}`; }
+
 const WEIGHTS = { time: 0.3, clean: 0.25, sound: 0.25, stay: 0.1, social: 0.1 };
 
 function sideOf(r) { return r >= 50 ? "right" : "left"; }
@@ -512,6 +520,9 @@ function recommendHtml(res, info) {
               <div class="rec-bar" role="img" aria-label="잘 맞는 정도 ${m.score}%"><i style="width:${m.score}%"></i></div>
               ${m.good.length ? `<h4>잘 맞는 점</h4><ul>${m.good.map(t => `<li>${t}</li>`).join("")}</ul>` : ""}
               ${m.warn.length ? `<h4>미리 정하면 좋은 점</h4><ul class="warn">${m.warn.map(t => `<li>${t}</li>`).join("")}</ul>` : ""}
+              <div class="rec-actions">
+                <a class="btn sm" href="${chatLink(m.cand.id)}">${esc(m.cand.id)}님과 채팅하기</a>
+              </div>
             </div>`).join("")}
           </div>
           ${excluded ? `<p class="note">흡연 여부가 달라서 제외된 후보 ${excluded}명</p>` : ""}
