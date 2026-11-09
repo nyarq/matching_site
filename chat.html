@@ -1,0 +1,905 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>룸메이트 채팅</title>
+
+  <style>
+    :root {
+      --bg: #ffffff;
+      --band: #eef8f4;
+      --surface: #ffffff;
+      --ink: #2b3340;
+      --muted: #727b88;
+      --line: #e3e7ec;
+      --agree: #2bae7e;
+      --agree-dark: #218e67;
+      --font-body: "IBM Plex Sans KR", "Malgun Gothic", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-body);
+      line-height: 1.6;
+    }
+
+    button {
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .header {
+      background: var(--band);
+      padding: 34px 20px;
+      text-align: center;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+    }
+
+    .header p {
+      margin: 8px 0 0;
+      color: var(--muted);
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 30px auto;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .chat-header {
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .chat-name {
+      font-weight: bold;
+      font-size: 17px;
+      overflow-wrap: anywhere;
+    }
+
+    .status {
+      font-size: 12px;
+      color: var(--agree-dark);
+      background: var(--band);
+      border-radius: 999px;
+      padding: 5px 12px;
+      white-space: nowrap;
+    }
+
+    .messages {
+      height: 360px;
+      overflow-y: auto;
+      padding: 20px;
+      background: #fafcfb;
+    }
+
+    .empty-message {
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 110px;
+    }
+
+    .message {
+      width: fit-content;
+      max-width: 78%;
+      padding: 12px 16px;
+      border-radius: 16px;
+      margin-bottom: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .mine {
+      background: var(--agree);
+      color: white;
+      margin-left: auto;
+    }
+
+    .other {
+      background: #e9edf0;
+      margin-right: auto;
+    }
+
+    .system {
+      background: #eef1f4;
+      color: var(--muted);
+      text-align: center;
+      margin: 14px auto;
+      max-width: 90%;
+      font-size: 13px;
+    }
+
+    .choices {
+      padding: 20px;
+      border-top: 1px solid var(--line);
+    }
+
+    .choices h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+    }
+
+    .categories,
+    .question-list,
+    .answer-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .categories {
+      margin-bottom: 20px;
+    }
+
+    .category-btn,
+    .choice-btn {
+      background: white;
+      border: 1px solid var(--line);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 10px 15px;
+      transition: background 0.15s;
+    }
+
+    .category-btn.active {
+      background: var(--agree);
+      color: white;
+      border-color: var(--agree);
+    }
+
+    .choice-btn:hover:not(:disabled) {
+      border-color: var(--agree);
+      color: var(--agree-dark);
+    }
+
+    .answer-area {
+      margin-top: 20px;
+      padding: 16px;
+      background: var(--band);
+      border-radius: 14px;
+    }
+
+    .answer-area h3 {
+      margin: 0 0 10px;
+    }
+
+    .note {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 10px 0 0;
+    }
+
+    .actions {
+      padding: 20px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      gap: 10px;
+    }
+
+    .action-btn {
+      flex: 1;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      font-weight: bold;
+    }
+
+    .accept-btn {
+      background: var(--agree);
+      color: white;
+      border-color: var(--agree);
+    }
+
+    .accept-btn:hover:not(:disabled) {
+      background: var(--agree-dark);
+    }
+
+    .end-btn:hover:not(:disabled) {
+      background: #f4f5f6;
+    }
+
+    .decision-panel {
+      padding: 18px;
+      margin: 0 20px 20px;
+      background: var(--band);
+      border-radius: 14px;
+      text-align: center;
+    }
+
+    .decision-panel h3 {
+      margin: 0 0 8px;
+    }
+
+    .decision-panel p {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .decision-buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    .decision-buttons button {
+      flex: 1;
+    }
+
+    .reset-area {
+      padding: 0 20px 20px;
+      text-align: right;
+    }
+
+    .reset-btn {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      text-decoration: underline;
+      padding: 5px;
+      font-size: 13px;
+    }
+
+    .demo-label {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+      margin: 0 20px 16px;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        margin: 18px 12px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .chat-header {
+        padding: 14px;
+      }
+
+      .actions,
+      .decision-buttons {
+        flex-direction: column;
+      }
+
+      .message {
+        max-width: 88%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <header class="header">
+    <h1>룸메이트 채팅</h1>
+    <p>미리 준비된 문장으로 서로의 생활 습관을 알아보세요.</p>
+  </header>
+
+  <main class="container">
+
+    <div class="chat-header">
+      <div class="chat-name" id="chatName">
+        룸메이트와의 채팅
+      </div>
+      <span class="status" id="status">대화 중</span>
+    </div>
+
+    <div class="messages" id="messages" aria-live="polite">
+      <p class="empty-message" id="emptyMessage">
+        질문을 선택하여 대화를 시작해 보세요!
+      </p>
+    </div>
+
+    <section class="choices" id="chatControls">
+      <h3>대화 주제</h3>
+      <div class="categories" id="categories"></div>
+
+      <h3>보낼 메시지</h3>
+      <div class="question-list" id="questionList"></div>
+
+      <div class="answer-area" id="answerArea" hidden>
+        <h3>상대방 답변 선택</h3>
+        <div class="answer-list" id="answerList"></div>
+        <p class="note">
+          시연용: 실제 상대방 대신 답변을 선택합니다.
+        </p>
+      </div>
+    </section>
+
+    <div class="actions" id="actions">
+      <button class="action-btn accept-btn" id="requestBtn">
+        룸메이트 채택 요청
+      </button>
+      <button class="action-btn end-btn" id="endBtn">
+        채팅 끝내기
+      </button>
+    </div>
+
+    <div class="decision-panel" id="decisionPanel" hidden>
+      <h3>룸메이트 채택 요청</h3>
+      <p>
+        상대방이 채택 요청을 수락할지 선택해 주세요.
+        (시연용)
+      </p>
+      <div class="decision-buttons">
+        <button class="action-btn accept-btn" id="acceptBtn">
+          수락하기
+        </button>
+        <button class="action-btn" id="rejectBtn">
+          거절하기
+        </button>
+      </div>
+    </div>
+
+    <p class="demo-label">
+      현재는 Firebase 연결 전, 한 브라우저에서 진행하는 시연 버전입니다.
+    </p>
+
+    <div class="reset-area">
+      <button class="reset-btn" id="resetBtn">
+        시연 초기화
+      </button>
+    </div>
+
+  </main>
+
+  <script>
+    // 1. 채팅 질문과 답변 데이터
+
+    const conversations = {
+      "인사 및 기본 정보": [
+        {
+          question: "안녕하세요! 반갑습니다.",
+          answers: [
+            "안녕하세요! 저도 반가워요.",
+            "안녕하세요! 잘 부탁드려요."
+          ]
+        },
+        {
+          question: "혹시 몇 학년이세요?",
+          answers: [
+            "1학년이에요.",
+            "2학년이에요.",
+            "3학년이에요.",
+            "4학년이에요."
+          ]
+        },
+        {
+          question: "어느 생활관에 거주하시나요?",
+          answers: [
+            "아직 배정받지 않았어요.",
+            "현재 기숙사에 거주하고 있어요.",
+            "다음 학기에 입사할 예정이에요."
+          ]
+        }
+      ],
+
+      "생활 습관": [
+        {
+          question: "보통 몇 시에 주무세요?",
+          answers: [
+            "밤 11시 이전에 자요.",
+            "12시쯤 자요.",
+            "새벽 1~2시쯤 자요.",
+            "날마다 달라요."
+          ]
+        },
+        {
+          question: "아침에 몇 시쯤 일어나세요?",
+          answers: [
+            "오전 7시 이전에 일어나요.",
+            "오전 7~9시 사이에 일어나요.",
+            "오전 9시 이후에 일어나요.",
+            "일정에 따라 달라요."
+          ]
+        },
+        {
+          question: "주말에도 기숙사에 계세요?",
+          answers: [
+            "대부분 기숙사에 있어요.",
+            "주말에는 본가에 가요.",
+            "그때그때 달라요."
+          ]
+        },
+        {
+          question: "밤늦게까지 공부하는 편이세요?",
+          answers: [
+            "네, 늦게까지 공부하는 편이에요.",
+            "가끔 늦게까지 공부해요.",
+            "아니요, 일찍 마치는 편이에요."
+          ]
+        }
+      ],
+
+      "청결 및 방 관리": [
+        {
+          question: "청소는 얼마나 자주 하세요?",
+          answers: [
+            "매일 조금씩 해요.",
+            "일주일에 1~2번 해요.",
+            "필요할 때 해요."
+          ]
+        },
+        {
+          question: "방 정리는 자주 하시는 편인가요?",
+          answers: [
+            "네, 항상 깔끔하게 정리해요.",
+            "가끔 정리하는 편이에요.",
+            "크게 신경 쓰지 않는 편이에요."
+          ]
+        },
+        {
+          question: "방에서 음식을 먹는 편이세요?",
+          answers: [
+            "네, 자주 먹는 편이에요.",
+            "가끔 간단한 음식만 먹어요.",
+            "아니요, 방에서는 잘 먹지 않아요."
+          ]
+        },
+        {
+          question: "빨래는 얼마나 자주 하세요?",
+          answers: [
+            "거의 매일 해요.",
+            "일주일에 1~2번 해요.",
+            "빨랫감이 쌓이면 해요."
+          ]
+        }
+      ],
+
+      "소음 및 개인 생활": [
+        {
+          question: "잠잘 때 소리에 민감하신가요?",
+          answers: [
+            "네, 작은 소리에도 깨요.",
+            "어느 정도는 괜찮아요.",
+            "소리에 크게 민감하지 않아요."
+          ]
+        },
+        {
+          question: "방에서 통화를 자주 하세요?",
+          answers: [
+            "네, 자주 하는 편이에요.",
+            "가끔 통화해요.",
+            "거의 하지 않아요."
+          ]
+        },
+        {
+          question: "코골이나 잠버릇이 있으신가요?",
+          answers: [
+            "아니요, 거의 없어요.",
+            "조금 있는 편이에요.",
+            "있는 편이에요."
+          ]
+        },
+        {
+          question: "조용한 환경을 선호하시나요?",
+          answers: [
+            "네, 조용한 환경을 좋아해요.",
+            "적당한 생활 소음은 괜찮아요.",
+            "소음에 크게 신경 쓰지 않아요."
+          ]
+        }
+      ],
+
+      "생활 환경": [
+        {
+          question: "방 온도는 어느 정도가 좋으세요?",
+          answers: [
+            "시원한 게 좋아요.",
+            "적당한 온도가 좋아요.",
+            "따뜻한 게 좋아요."
+          ]
+        },
+        {
+          question: "에어컨을 자주 켜는 편이세요?",
+          answers: [
+            "네, 자주 켜는 편이에요.",
+            "더울 때만 켜요.",
+            "에어컨을 잘 켜지 않아요."
+          ]
+        },
+        {
+          question: "잘 때 불을 완전히 끄는 편이세요?",
+          answers: [
+            "네, 완전히 꺼야 잠이 와요.",
+            "작은 조명은 괜찮아요.",
+            "불빛에 크게 민감하지 않아요."
+          ]
+        },
+        {
+          question: "환기는 얼마나 자주 하세요?",
+          answers: [
+            "매일 환기하는 편이에요.",
+            "가끔 환기해요.",
+            "필요할 때만 환기해요."
+          ]
+        }
+      ]
+    };
+
+    // 2. 추천 페이지에서 상대방 정보 가져오기
+
+    const params = new URLSearchParams(window.location.search);
+    const roommate = params.get("with") || "룸메이트";
+
+    document.getElementById("chatName").textContent =
+      roommate + "님과의 채팅";
+
+    // 3. HTML 요소 가져오기
+
+    const messagesEl = document.getElementById("messages");
+    const emptyMessageEl = document.getElementById("emptyMessage");
+    const categoriesEl = document.getElementById("categories");
+    const questionListEl = document.getElementById("questionList");
+    const answerAreaEl = document.getElementById("answerArea");
+    const answerListEl = document.getElementById("answerList");
+    const chatControlsEl = document.getElementById("chatControls");
+    const actionsEl = document.getElementById("actions");
+    const decisionPanelEl = document.getElementById("decisionPanel");
+    const statusEl = document.getElementById("status");
+    const requestBtn = document.getElementById("requestBtn");
+
+    // 4. 채팅 상태 관리
+
+    const storageKey = "roommate-chat-demo:" + roommate;
+
+    function initialState() {
+      return {
+        messages: [],
+        status: "chatting",
+        selectedCategory: "인사 및 기본 정보",
+        pendingQuestion: null
+      };
+    }
+
+    function loadState() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(storageKey));
+
+        if (
+          saved &&
+          Array.isArray(saved.messages) &&
+          ["chatting", "requested", "matched", "ended"]
+            .includes(saved.status)
+        ) {
+          return {
+            ...initialState(),
+            ...saved
+          };
+        }
+      } catch (error) {
+        console.log("저장된 대화가 없어 새로 시작합니다.");
+      }
+
+      return initialState();
+    }
+
+    let state = loadState();
+
+    function saveState() {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(state));
+      } catch (error) {
+        console.log("대화 저장에 실패했습니다.");
+      }
+    }
+
+    // 5. 버튼 생성
+
+    function makeButton(text, className, handler) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = className;
+      button.textContent = text;
+      button.addEventListener("click", handler);
+      return button;
+    }
+
+    // 6. 메시지 추가
+
+    function addMessage(text, type) {
+      state.messages.push({ text, type });
+      saveState();
+      renderMessages();
+    }
+
+    function renderMessages() {
+      messagesEl.replaceChildren();
+
+      if (state.messages.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "empty-message";
+        empty.textContent =
+          "질문을 선택하여 대화를 시작해 보세요!";
+        messagesEl.appendChild(empty);
+        return;
+      }
+
+      state.messages.forEach(item => {
+        const bubble = document.createElement("div");
+        bubble.className = "message " + item.type;
+        bubble.textContent = item.text;
+        messagesEl.appendChild(bubble);
+      });
+
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // 7. 대화 주제 표시
+
+    function renderCategories() {
+      categoriesEl.replaceChildren();
+
+      Object.keys(conversations).forEach(category => {
+        const active = category === state.selectedCategory;
+
+        const button = makeButton(
+          category,
+          "category-btn" + (active ? " active" : ""),
+          () => {
+            state.selectedCategory = category;
+            saveState();
+            renderCategories();
+            renderQuestions();
+          }
+        );
+
+        categoriesEl.appendChild(button);
+      });
+    }
+
+    // 8. 질문 선택지 표시
+
+    function renderQuestions() {
+      questionListEl.replaceChildren();
+
+      const items = conversations[state.selectedCategory] || [];
+
+      items.forEach(item => {
+        const button = makeButton(
+          item.question,
+          "choice-btn",
+          () => sendQuestion(item)
+        );
+
+        questionListEl.appendChild(button);
+      });
+    }
+
+    // 9. 질문 보내기
+
+    function sendQuestion(item) {
+      if (state.status !== "chatting") return;
+
+      if (state.pendingQuestion) {
+        alert("먼저 상대방의 답변을 선택해 주세요.");
+        return;
+      }
+
+      state.pendingQuestion = item;
+      addMessage(item.question, "mine");
+      renderAnswerChoices();
+    }
+
+    // 10. 답변 선택지 표시
+
+    function renderAnswerChoices() {
+      answerListEl.replaceChildren();
+
+      if (
+        state.status !== "chatting" ||
+        !state.pendingQuestion
+      ) {
+        answerAreaEl.hidden = true;
+        return;
+      }
+
+      answerAreaEl.hidden = false;
+
+      state.pendingQuestion.answers.forEach(answer => {
+        const button = makeButton(
+          answer,
+          "choice-btn",
+          () => sendAnswer(answer)
+        );
+
+        answerListEl.appendChild(button);
+      });
+    }
+
+    // 11. 상대방 답변 시연
+
+    function sendAnswer(answer) {
+      if (
+        state.status !== "chatting" ||
+        !state.pendingQuestion
+      ) return;
+
+      state.pendingQuestion = null;
+      addMessage(answer, "other");
+      renderAnswerChoices();
+    }
+
+    // 12. 룸메이트 채택 요청
+
+    function requestMatching() {
+      if (state.status !== "chatting") return;
+
+      if (state.pendingQuestion) {
+        alert("먼저 진행 중인 질문의 답변을 선택해 주세요.");
+        return;
+      }
+
+      const confirmed = confirm(
+        roommate + "님에게 룸메이트 채택을 요청할까요?"
+      );
+
+      if (!confirmed) return;
+
+      state.status = "requested";
+
+      addMessage(
+        "룸메이트 채택 요청을 보냈습니다.",
+        "system"
+      );
+
+      renderUI();
+    }
+
+    // 13. 상대방 수락 시연
+
+    function acceptMatching() {
+      if (state.status !== "requested") return;
+
+      state.status = "matched";
+
+      addMessage(
+        "상대방이 채택 요청을 수락했습니다. " +
+        "룸메이트 매칭이 완료되었습니다!",
+        "system"
+      );
+
+      renderUI();
+    }
+
+    // 14. 상대방 거절 시연
+
+    function rejectMatching() {
+      if (state.status !== "requested") return;
+
+      state.status = "chatting";
+
+      addMessage(
+        "상대방이 채택 요청을 거절했습니다. " +
+        "대화는 계속할 수 있습니다.",
+        "system"
+      );
+
+      renderUI();
+    }
+
+    // 15. 채팅 끝내기
+
+    function endChat() {
+      if (
+        state.status === "ended" ||
+        state.status === "matched"
+      ) return;
+
+      const confirmed = confirm(
+        "채팅을 종료하시겠습니까?\n" +
+        "종료 후에는 메시지를 보낼 수 없습니다."
+      );
+
+      if (!confirmed) return;
+
+      state.status = "ended";
+      state.pendingQuestion = null;
+
+      addMessage(
+        "채팅이 종료되었습니다.",
+        "system"
+      );
+
+      renderUI();
+    }
+
+    // 16. 현재 상태에 맞춰 화면 변경
+
+    function renderUI() {
+      renderMessages();
+
+      const chatting = state.status === "chatting";
+      const requested = state.status === "requested";
+
+      chatControlsEl.hidden = !chatting;
+      actionsEl.hidden =
+        state.status === "ended" ||
+        state.status === "matched";
+
+      decisionPanelEl.hidden = !requested;
+
+      requestBtn.hidden = !chatting;
+
+      if (chatting) {
+        statusEl.textContent = "대화 중";
+      } else if (requested) {
+        statusEl.textContent = "채택 요청 대기 중";
+      } else if (state.status === "matched") {
+        statusEl.textContent = "매칭 완료";
+      } else {
+        statusEl.textContent = "채팅 종료";
+      }
+
+      renderCategories();
+      renderQuestions();
+      renderAnswerChoices();
+    }
+
+    // 17. 버튼에 기능 연결
+
+    document.getElementById("requestBtn")
+      .addEventListener("click", requestMatching);
+
+    document.getElementById("acceptBtn")
+      .addEventListener("click", acceptMatching);
+
+    document.getElementById("rejectBtn")
+      .addEventListener("click", rejectMatching);
+
+    document.getElementById("endBtn")
+      .addEventListener("click", endChat);
+
+    document.getElementById("resetBtn")
+      .addEventListener("click", () => {
+        const confirmed = confirm(
+          "시연 데이터를 모두 초기화하시겠습니까?"
+        );
+
+        if (!confirmed) return;
+
+        localStorage.removeItem(storageKey);
+        state = initialState();
+        renderUI();
+      });
+
+    // 18. 첫 화면 실행
+
+    renderUI();
+  </script>
+
+</body>
+</html>
