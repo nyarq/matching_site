@@ -86,6 +86,7 @@
         <div><b>기숙사 성향 매칭</b><small>나에게 맞는 룸메이트 찾기</small></div>
       </div>
       <nav aria-label="주 메뉴">
+        <!-- 팀의 메인 화면 경로가 확정되면 이곳에 홈 링크를 추가합니다. 메인 화면에서는 mypage.html로 연결합니다. -->
         <a href="survey.html">성향 검사</a>
         <a href="posts.html">모집 게시판</a>
         <a href="mypage.html" aria-current="page">마이페이지</a>
@@ -150,11 +151,6 @@
     "use strict";
 
     const byId = id => document.getElementById(id);
-    const PROFILE_KEY = "roommate-profile-demo-v1";
-    const SURVEY_KEY = "roommate-survey";
-    const POSTS_KEY = "roommate-posts-demo-v1";
-    const CHAT_PREFIX = "roommate-chat-demo:";
-    const DEMO_AUTHOR = "local-demo-user";
     const SURVEY_FIELDS = {
       dorm: "생활관", smoke: "흡연 여부", snore: "코골이·잠버릇",
       temp: "선호하는 방 온도", food: "방에서 음식 먹기"
@@ -169,6 +165,45 @@
       } catch {
         return null;
       }
+    }
+
+    // 로그인 연동 시 인증 상태를 먼저 확인한 뒤, 아래 저장소를 로그인한 UID의
+    // 데이터만 읽고 쓰는 API로 교체합니다. 시연용 데이터는 계정으로 자동 복사하지 않습니다.
+    const dashboardData = {
+      load() {
+        const savedPosts = readStored("roommate-posts-demo-v1");
+        const posts = Array.isArray(savedPosts)
+          ? savedPosts.filter(post => post?.authorId === "local-demo-user" && typeof post.id === "string")
+          : [];
+        return {
+          profile: readStored("roommate-profile-demo-v1"),
+          survey: readStored("roommate-survey"),
+          posts,
+          chats: readDemoChats()
+        };
+      },
+      saveProfile(profile) {
+        localStorage.setItem("roommate-profile-demo-v1", JSON.stringify(profile));
+      }
+    };
+
+    function readDemoChats() {
+      const prefix = "roommate-chat-demo:";
+      const chats = [];
+      try {
+        for (let index = 0; index < localStorage.length; index++) {
+          const key = localStorage.key(index);
+          if (!key?.startsWith(prefix)) continue;
+          const partner = key.slice(prefix.length);
+          const chat = readStored(key);
+          if (!partner || !Array.isArray(chat?.messages) || !Object.hasOwn(CHAT_STATUS, chat.status)) continue;
+          if (chat.messages.length === 0 && chat.status === "chatting") continue;
+          chats.push({ partner, status: chat.status });
+        }
+      } catch {
+        // 브라우저에서 저장소 사용을 제한할 수 있습니다.
+      }
+      return chats;
     }
 
     function linkTo(page, params) {
@@ -202,8 +237,7 @@
       byId(messageId).hidden = rows.length > 0;
     }
 
-    function renderSurvey() {
-      const survey = readStored(SURVEY_KEY);
+    function renderSurvey(survey) {
       const details = Object.entries(SURVEY_FIELDS).filter(([key]) => typeof survey?.info?.[key] === "string" && survey.info[key]);
       const answers = Array.from({ length: 25 }, (_, index) => survey?.answers?.[index]);
       const answered = answers.filter(value => Number.isInteger(value) && value >= 1 && value <= 6).length;
@@ -230,9 +264,7 @@
       byId("postFromSurveyLink").href = code ? linkTo("posts.html", { type: code, compose: "1" }) : "posts.html";
     }
 
-    function renderPosts() {
-      const saved = readStored(POSTS_KEY);
-      const posts = Array.isArray(saved) ? saved.filter(post => post?.authorId === DEMO_AUTHOR && typeof post.id === "string") : [];
+    function renderPosts(posts) {
       posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       renderActivity("postList", "postsMessage", posts.map(post => ({
         title: post.title || "(제목 없음)", details: post.dorm,
@@ -241,28 +273,13 @@
       })));
     }
 
-    function renderChats() {
-      const chats = [];
-      try {
-        for (let index = 0; index < localStorage.length; index++) {
-          const key = localStorage.key(index);
-          if (!key?.startsWith(CHAT_PREFIX)) continue;
-          const name = key.slice(CHAT_PREFIX.length);
-          const chat = readStored(key);
-          if (!name || !Array.isArray(chat?.messages) || !Object.hasOwn(CHAT_STATUS, chat.status)) continue;
-          if (chat.messages.length === 0 && chat.status === "chatting") continue;
-          chats.push({ title: name, label: CHAT_STATUS[chat.status], closed: chat.status === "ended", href: linkTo("chat.html", { with: name }) });
-        }
-      } catch {
-        // Storage can be unavailable in restricted browser sessions.
-      }
-      chats.sort((a, b) => a.title.localeCompare(b.title, "ko"));
-      renderActivity("chatList", "chatMessage", chats);
+    function renderChats(chats) {
+      chats.sort((a, b) => a.partner.localeCompare(b.partner, "ko"));
+      renderActivity("chatList", "chatMessage", chats.map(chat => ({
+        title: chat.partner, label: CHAT_STATUS[chat.status], closed: chat.status === "ended",
+        href: linkTo("chat.html", { with: chat.partner })
+      })));
     }
-
-    const profile = readStored(PROFILE_KEY);
-    byId("nickname").value = typeof profile?.nickname === "string" ? profile.nickname : "";
-    byId("intro").value = typeof profile?.intro === "string" ? profile.intro : "";
 
     byId("profileForm").addEventListener("submit", event => {
       event.preventDefault();
@@ -277,7 +294,7 @@
         return;
       }
       try {
-        localStorage.setItem(PROFILE_KEY, JSON.stringify({ nickname, intro }));
+        dashboardData.saveProfile({ nickname, intro });
         byId("nickname").value = nickname;
         byId("intro").value = intro;
         feedback.textContent = "프로필을 저장했어요.";
@@ -287,10 +304,15 @@
       }
     });
 
-    window.addEventListener("pageshow", () => {
-      renderSurvey();
-      renderPosts();
-      renderChats();
+    window.addEventListener("pageshow", event => {
+      const { profile, survey, posts, chats } = dashboardData.load();
+      if (!event.persisted) {
+        byId("nickname").value = typeof profile?.nickname === "string" ? profile.nickname : "";
+        byId("intro").value = typeof profile?.intro === "string" ? profile.intro : "";
+      }
+      renderSurvey(survey);
+      renderPosts(posts);
+      renderChats(chats);
     });
   </script>
 </body>
