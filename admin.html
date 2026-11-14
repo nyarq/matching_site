@@ -36,33 +36,41 @@
     .brand-mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: var(--brand); color: white; font: 23px "Jua", sans-serif; }
     .hero { padding: 40px 0 24px; display: grid; gap: 8px; }
     .muted { color: var(--muted); font-size: .875rem; }
-    .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 20px; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 20px; }
     .stats div, .card { background: white; border: 1px solid var(--line); border-radius: 16px; }
     .stats div { padding: 14px 18px; }
     .stats dt { font-size: .875rem; color: var(--muted); }
     .stats dd { margin: 3px 0 0; font-size: 1.45rem; font-weight: 700; }
     .card { padding: 22px; margin-bottom: 44px; box-shadow: 0 7px 25px #24493606; }
     .card-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
-    .filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, .35fr); gap: 12px; margin: 16px 0; }
+    .filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, .35fr) minmax(130px, .35fr); gap: 12px; margin: 16px 0; }
     .field { display: grid; gap: 6px; font-size: .875rem; font-weight: 700; }
-    input, select { min-width: 0; width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid #cddbd2; border-radius: 10px; background: white; color: var(--ink); font: inherit; font-weight: 400; }
+    input, select, textarea { min-width: 0; width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid #cddbd2; border-radius: 10px; background: white; color: var(--ink); font: inherit; font-weight: 400; }
     .button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 8px 13px; border: 0; border-radius: 10px; background: var(--brand-soft); color: var(--brand-dark); font: inherit; font-size: .875rem; font-weight: 700; text-decoration: none; cursor: pointer; }
     .button:hover { background: #d7f1e3; }
     .button:disabled { opacity: .6; cursor: wait; }
     .tag { padding: 4px 9px; border-radius: 7px; background: var(--brand-soft); color: var(--brand-dark); font-size: .75rem; font-weight: 700; white-space: nowrap; }
     .tag.closed { background: #eff2ef; color: var(--muted); }
+    .tag.removed { background: #faeceb; color: var(--danger); }
     .post-list { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
     details { border: 1px solid var(--line); border-radius: 10px; overflow-wrap: anywhere; }
     summary { padding: 12px; cursor: pointer; }
     summary .tag { margin-inline-start: 8px; }
     .post-details { padding: 0 12px 12px; }
     .post-body { white-space: pre-wrap; margin: 8px 0 12px; }
+    .moderation-note { margin-bottom: 12px; white-space: pre-wrap; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    dialog { width: min(100% - 32px, 450px); border: 1px solid var(--line); border-radius: 16px; padding: 22px; color: var(--ink); }
+    dialog::backdrop { background: #10231e70; }
+    dialog form { display: grid; gap: 12px; }
+    dialog p { overflow-wrap: anywhere; }
+    textarea { resize: vertical; }
     .feedback { margin-top: 8px; color: var(--brand-dark); font-size: .875rem; }
     .feedback:empty { margin: 0; }
     .feedback.error { color: var(--danger); }
     @media (max-width: 520px) {
       .hero { padding-top: 28px; }
-      .stats { gap: 8px; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
       .stats div, .card { padding: 12px; }
       .filters { grid-template-columns: 1fr; }
     }
@@ -87,6 +95,7 @@
         <div><dt>전체 글</dt><dd id="totalCount">0</dd></div>
         <div><dt>모집 중</dt><dd id="openCount">0</dd></div>
         <div><dt>모집 마감</dt><dd id="closedCount">0</dd></div>
+        <div><dt>숨김</dt><dd id="hiddenCount">0</dd></div>
       </dl>
       <section class="card" aria-labelledby="postsTitle">
         <div class="card-head">
@@ -104,6 +113,13 @@
               <option value="closed">모집 마감</option>
             </select>
           </label>
+          <label class="field">게시판 표시
+            <select id="visibilityFilter">
+              <option value="all">전체</option>
+              <option value="visible">표시 중</option>
+              <option value="hidden">숨김</option>
+            </select>
+          </label>
         </div>
         <p class="muted" id="resultCount" aria-live="polite"></p>
         <p class="feedback" id="feedback" role="status"></p>
@@ -113,13 +129,30 @@
     </div>
   </main>
 
+  <dialog id="moderationDialog" aria-labelledby="moderationHeading">
+    <form id="moderationForm">
+      <h2 id="moderationHeading">글 숨기기</h2>
+      <p id="moderationTitle" class="muted"></p>
+      <label class="field">처리 사유
+        <textarea id="moderationReason" rows="3" maxlength="200" required autofocus></textarea>
+      </label>
+      <p id="moderationError" class="feedback error" role="status"></p>
+      <div class="actions">
+        <button class="button" id="moderationSubmit" type="submit">숨기기</button>
+        <button class="button" id="moderationCancel" type="button">취소</button>
+      </div>
+    </form>
+  </dialog>
+
   <script>
     "use strict";
 
     const byId = id => document.getElementById(id);
     const POSTS_KEY = "roommate-posts-demo-v1";
     const STATUS = { open: "모집 중", closed: "모집 마감" };
+    const isHidden = post => post.moderation?.hidden === true;
     let posts = [];
+    let selectedPost = null;
 
     function readDemoPosts() {
       const saved = JSON.parse(localStorage.getItem(POSTS_KEY));
@@ -137,9 +170,20 @@
       },
       async setStatus(id, expectedStatus, nextStatus) {
         const saved = readDemoPosts();
-        const index = saved.findIndex(post => post?.id === id && post.status === expectedStatus);
+        const index = saved.findIndex(post => post?.id === id && post.status === expectedStatus && !isHidden(post));
         if (index < 0) return false;
         saved[index] = { ...saved[index], status: nextStatus, updatedAt: new Date().toISOString() };
+        localStorage.setItem(POSTS_KEY, JSON.stringify(saved));
+        return true;
+      },
+      async setVisibility(post, hidden, reason) {
+        const saved = readDemoPosts();
+        const index = saved.findIndex(current => current?.id === post.id &&
+          isHidden(current) === isHidden(post) && current.moderation?.processedAt === post.moderation?.processedAt);
+        if (index < 0) return false;
+        const moderation = { hidden, hideReason: hidden ? reason : saved[index].moderation?.hideReason,
+          restoreReason: hidden ? undefined : reason, processedAt: new Date().toISOString() };
+        saved[index] = { ...saved[index], moderation };
         localStorage.setItem(POSTS_KEY, JSON.stringify(saved));
         return true;
       }
@@ -162,14 +206,32 @@
       const details = document.createElement("details");
       const summary = textElement("summary", post.title || "(제목 없음)");
       summary.append(textElement("span", STATUS[post.status], post.status === "closed" ? "tag closed" : "tag"));
+      const hidden = isHidden(post);
+      if (hidden) summary.append(textElement("span", "숨김", "tag removed"));
       const body = document.createElement("div");
       body.className = "post-details";
       const metadata = [post.authorName || "익명 학생", post.dorm, post.typeCode].filter(Boolean).join(" · ");
       const nextStatus = post.status === "open" ? "closed" : "open";
-      const button = textElement("button", nextStatus === "closed" ? "모집 마감하기" : "모집 다시 열기", "button");
-      button.type = "button";
-      button.addEventListener("click", () => changeStatus(post, nextStatus, button));
-      body.append(textElement("p", metadata, "muted"), textElement("p", post.body || "", "post-body"), button);
+      body.append(textElement("p", metadata, "muted"), textElement("p", post.body || "", "post-body"));
+      if (post.moderation?.hideReason) {
+        body.append(textElement("p", `숨김 사유: ${post.moderation.hideReason}`, "muted moderation-note"));
+      }
+      if (post.moderation?.restoreReason) {
+        body.append(textElement("p", `복구 사유: ${post.moderation.restoreReason}`, "muted moderation-note"));
+      }
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      if (!hidden) {
+        const button = textElement("button", nextStatus === "closed" ? "모집 마감하기" : "모집 다시 열기", "button");
+        button.type = "button";
+        button.addEventListener("click", () => changeStatus(post, nextStatus, button));
+        actions.append(button);
+      }
+      const visibilityButton = textElement("button", hidden ? "글 복구하기" : "글 숨기기", "button");
+      visibilityButton.type = "button";
+      visibilityButton.addEventListener("click", () => openModeration(post));
+      actions.append(visibilityButton);
+      body.append(actions);
       details.append(summary, body);
       row.append(details);
       return row;
@@ -178,15 +240,18 @@
     function render() {
       const query = byId("search").value.trim().toLocaleLowerCase("ko-KR");
       const filter = byId("filter").value;
+      const visibility = byId("visibilityFilter").value;
       const open = posts.filter(post => post.status === "open").length;
       const visible = posts.filter(post => {
         const searchText = [post.title, post.authorName, post.dorm].join(" ").toLocaleLowerCase("ko-KR");
-        return (filter === "all" || post.status === filter) && searchText.includes(query);
+        return (filter === "all" || post.status === filter) &&
+          (visibility === "all" || isHidden(post) === (visibility === "hidden")) && searchText.includes(query);
       });
 
       byId("totalCount").textContent = posts.length;
       byId("openCount").textContent = open;
       byId("closedCount").textContent = posts.length - open;
+      byId("hiddenCount").textContent = posts.filter(isHidden).length;
       byId("resultCount").textContent = `${visible.length}개의 모집 글`;
       byId("empty").hidden = visible.length > 0;
       byId("empty").textContent = posts.length ? "조건에 맞는 모집 글이 없어요."
@@ -220,11 +285,57 @@
       }
     }
 
+    function openModeration(post) {
+      selectedPost = post;
+      const hidden = isHidden(post);
+      byId("moderationForm").reset();
+      byId("moderationHeading").textContent = hidden ? "글 복구하기" : "글 숨기기";
+      byId("moderationTitle").textContent = post.title || "(제목 없음)";
+      byId("moderationSubmit").textContent = hidden ? "복구하기" : "숨기기";
+      byId("moderationError").textContent = "";
+      byId("moderationDialog").showModal();
+    }
+
+    async function submitModeration(event) {
+      event.preventDefault();
+      const reasonField = byId("moderationReason");
+      const reason = reasonField.value.trim();
+      const error = byId("moderationError");
+      if (!reason || reason.length > reasonField.maxLength) {
+        error.textContent = "처리 사유를 1~200자로 입력해 주세요.";
+        reasonField.focus();
+        return;
+      }
+      const post = selectedPost;
+      const hidden = !isHidden(post);
+      const submit = byId("moderationSubmit");
+      const cancel = byId("moderationCancel");
+      submit.disabled = cancel.disabled = true;
+      try {
+        const updated = await adminPosts.setVisibility(post, hidden, reason);
+        byId("moderationDialog").close();
+        const action = hidden ? "숨겼어요" : "복구했어요";
+        await refresh(updated ? `‘${post.title || "제목 없음"}’ 글을 ${action}.`
+          : "글이 이미 변경되었어요. 최신 목록을 확인해 주세요.", !updated);
+        byId("refresh").focus();
+      } catch {
+        error.textContent = "변경 내용을 저장하지 못했어요. 다시 시도해 주세요.";
+      } finally {
+        submit.disabled = cancel.disabled = false;
+      }
+    }
+
     function initialize() {
       byId("workspace").hidden = false;
       byId("search").addEventListener("input", render);
       byId("filter").addEventListener("change", render);
+      byId("visibilityFilter").addEventListener("change", render);
       byId("refresh").addEventListener("click", () => refresh());
+      byId("moderationForm").addEventListener("submit", submitModeration);
+      byId("moderationCancel").addEventListener("click", () => byId("moderationDialog").close());
+      byId("moderationDialog").addEventListener("cancel", event => {
+        if (byId("moderationSubmit").disabled) event.preventDefault();
+      });
       window.addEventListener("pageshow", () => refresh());
       window.addEventListener("storage", event => {
         if (event.key === POSTS_KEY || event.key === null) refresh();
