@@ -64,12 +64,13 @@
     .info dd { margin: 2px 0 0; font-size: .875rem; font-weight: 700; }
     .activity { list-style: none; padding: 0; margin: 0; }
     .activity li + li { border-top: 1px solid var(--line); }
-    .activity a { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 4px; text-decoration: none; border-radius: 8px; }
-    .activity a:hover { background: var(--page); }
+    .activity-row { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 4px; text-decoration: none; border-radius: 8px; }
+    a.activity-row:hover { background: var(--page); }
     .activity strong { display: block; overflow-wrap: anywhere; font-size: .95rem; }
     .activity small { display: block; color: var(--muted); }
     .tag { flex: none; padding: 4px 8px; border-radius: 7px; background: var(--brand-soft); color: var(--brand-dark); font-size: .75rem; font-weight: 700; }
     .tag.closed { background: #eff2ef; color: var(--muted); }
+    .tag.moderated { background: #faeceb; color: #a43333; }
     .note { padding: 17px 0 45px; }
     @media (max-width: 650px) {
       .dashboard { grid-template-columns: 1fr; }
@@ -151,6 +152,7 @@
     "use strict";
 
     const byId = id => document.getElementById(id);
+    const POSTS_KEY = "roommate-posts-demo-v1";
     const SURVEY_FIELDS = {
       dorm: "생활관", smoke: "흡연 여부", snore: "코골이·잠버릇",
       temp: "선호하는 방 온도", food: "방에서 음식 먹기"
@@ -171,16 +173,18 @@
     // 데이터만 읽고 쓰는 API로 교체합니다. 시연용 데이터는 계정으로 자동 복사하지 않습니다.
     const dashboardData = {
       load() {
-        const savedPosts = readStored("roommate-posts-demo-v1");
-        const posts = Array.isArray(savedPosts)
-          ? savedPosts.filter(post => post?.authorId === "local-demo-user" && typeof post.id === "string")
-          : [];
         return {
           profile: readStored("roommate-profile-demo-v1"),
           survey: readStored("roommate-survey"),
-          posts,
+          posts: this.loadPosts(),
           chats: readDemoChats()
         };
+      },
+      loadPosts() {
+        const savedPosts = readStored(POSTS_KEY);
+        return Array.isArray(savedPosts)
+          ? savedPosts.filter(post => post?.authorId === "local-demo-user" && typeof post.id === "string")
+          : [];
       },
       saveProfile(profile) {
         localStorage.setItem("roommate-profile-demo-v1", JSON.stringify(profile));
@@ -216,17 +220,18 @@
       return element;
     }
 
-    function activityRow({ title, details, label, closed, href }) {
+    function activityRow({ title, details, label, closed, moderated, href }) {
       const item = document.createElement("li");
-      const link = document.createElement("a");
-      link.href = href;
+      const row = document.createElement(href ? "a" : "div");
+      row.className = "activity-row";
+      if (href) row.href = href;
       const description = document.createElement("span");
       description.append(textElement("strong", title));
       if (details) description.append(textElement("small", details));
       const status = textElement("span", label);
-      status.className = closed ? "tag closed" : "tag";
-      link.append(description, status);
-      item.append(link);
+      status.className = moderated ? "tag moderated" : closed ? "tag closed" : "tag";
+      row.append(description, status);
+      item.append(row);
       return item;
     }
 
@@ -266,11 +271,15 @@
 
     function renderPosts(posts) {
       posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      renderActivity("postList", "postsMessage", posts.map(post => ({
-        title: post.title || "(제목 없음)", details: post.dorm,
-        label: post.status === "closed" ? "모집 마감" : "모집 중",
-        closed: post.status === "closed", href: linkTo("posts.html", { post: post.id })
-      })));
+      renderActivity("postList", "postsMessage", posts.map(post => {
+        const moderated = post.moderation?.hidden === true;
+        return {
+          title: post.title || "(제목 없음)", details: post.dorm,
+          label: moderated ? "숨김 처리됨" : post.status === "closed" ? "모집 마감" : "모집 중",
+          moderated, closed: post.status === "closed",
+          href: moderated ? null : linkTo("posts.html", { post: post.id })
+        };
+      }));
     }
 
     function renderChats(chats) {
@@ -313,6 +322,9 @@
       renderSurvey(survey);
       renderPosts(posts);
       renderChats(chats);
+    });
+    window.addEventListener("storage", event => {
+      if (event.key === POSTS_KEY || event.key === null) renderPosts(dashboardData.loadPosts());
     });
   </script>
 </body>
