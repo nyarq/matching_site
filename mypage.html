@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2bae7e">
+  <title>마이페이지 | 기숙사 성향 매칭</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Jua&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --brand: #218d68;
+      --brand-dark: #17694d;
+      --brand-soft: #e8f7ef;
+      --ink: #1b2925;
+      --muted: #53685f;
+      --line: #e4ebe6;
+      --page: #f5f8f6;
+      --danger: #a43333;
+      font-family: "IBM Plex Sans KR", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; color: var(--ink); background: var(--page); line-height: 1.6; }
+    h1, h2, p { margin: 0; }
+    h1, h2 { font-family: "Jua", sans-serif; font-weight: 400; line-height: 1.25; }
+    h1 { font-size: clamp(2.15rem, 6vw, 2.6rem); }
+    h2 { font-size: 1.4rem; }
+    a { color: inherit; }
+    :focus-visible { outline: 3px solid #62b28f; outline-offset: 3px; }
+    .shell { width: min(100% - 32px, 1000px); margin: 0 auto; }
+    .site-header { background: white; border-bottom: 1px solid var(--line); }
+    .header-inner { min-height: 72px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px 20px; padding-block: 12px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: var(--brand); color: white; font: 23px "Jua", sans-serif; }
+    .brand b { display: block; font-size: 17px; }
+    .brand small { display: block; color: var(--muted); font-size: 11px; }
+    nav { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    nav a { padding: 6px 10px; border-radius: 8px; text-decoration: none; font-size: .875rem; font-weight: 700; }
+    nav a:hover, nav a[aria-current] { color: var(--brand-dark); background: var(--brand-soft); }
+    .hero { padding: 40px 0 26px; display: grid; gap: 8px; }
+    .muted { color: var(--muted); font-size: .9rem; }
+    .dashboard { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .card { min-width: 0; padding: 23px; display: grid; align-content: start; gap: 16px; background: white; border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 7px 25px #24493606; }
+    .card-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+    .field { display: grid; gap: 6px; }
+    .field label { font-size: .875rem; font-weight: 700; }
+    input, textarea { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid #cddbd2; border-radius: 10px; background: white; color: var(--ink); font: inherit; }
+    textarea { min-height: 88px; resize: vertical; }
+    #profileForm { display: grid; gap: 13px; }
+    .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .button { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 10px; padding: 8px 13px; background: var(--brand-soft); color: var(--brand-dark); text-decoration: none; font: 700 .875rem/1.5 "IBM Plex Sans KR", system-ui, sans-serif; cursor: pointer; }
+    .button:hover { background: #d7f1e3; }
+    .button.primary { background: var(--brand-dark); color: white; }
+    .button.primary:hover { background: #12583f; }
+    .feedback { color: var(--brand-dark); font-size: .875rem; }
+    .feedback.error { color: var(--danger); }
+    .type-code { color: var(--brand-dark); font: 2rem "Jua", sans-serif; letter-spacing: .08em; }
+    .info { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; gap: 8px; }
+    .info div { padding: 8px 10px; border-radius: 8px; background: var(--page); overflow-wrap: anywhere; }
+    .info dt { color: var(--muted); font-size: .75rem; }
+    .info dd { margin: 2px 0 0; font-size: .875rem; font-weight: 700; }
+    .activity { list-style: none; padding: 0; margin: 0; }
+    .activity li + li { border-top: 1px solid var(--line); }
+    .activity a { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 4px; text-decoration: none; border-radius: 8px; }
+    .activity a:hover { background: var(--page); }
+    .activity strong { display: block; overflow-wrap: anywhere; font-size: .95rem; }
+    .activity small { display: block; color: var(--muted); }
+    .tag { flex: none; padding: 4px 8px; border-radius: 7px; background: var(--brand-soft); color: var(--brand-dark); font-size: .75rem; font-weight: 700; }
+    .tag.closed { background: #eff2ef; color: var(--muted); }
+    .note { padding: 17px 0 45px; }
+    @media (max-width: 650px) {
+      .dashboard { grid-template-columns: 1fr; }
+      .card { padding: 18px; }
+      .hero { padding-top: 30px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="shell header-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">룸</span>
+        <div><b>기숙사 성향 매칭</b><small>나에게 맞는 룸메이트 찾기</small></div>
+      </div>
+      <nav aria-label="주 메뉴">
+        <a href="survey.html">성향 검사</a>
+        <a href="posts.html">모집 게시판</a>
+        <a href="mypage.html" aria-current="page">마이페이지</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="shell">
+    <div class="hero">
+      <h1>마이페이지</h1>
+      <p class="muted">내 프로필과 룸메이트 찾기 활동을 한곳에서 확인해요.</p>
+    </div>
+    <div class="dashboard">
+      <section class="card" aria-labelledby="profileTitle">
+        <h2 id="profileTitle">내 프로필</h2>
+        <form id="profileForm">
+          <div class="field">
+            <label for="nickname">닉네임</label>
+            <input id="nickname" maxlength="20" required placeholder="닉네임을 입력해 주세요">
+          </div>
+          <div class="field">
+            <label for="intro">한 줄 소개</label>
+            <textarea id="intro" maxlength="120" rows="2" placeholder="나의 생활 습관이나 원하는 룸메이트를 적어 보세요"></textarea>
+          </div>
+          <div class="actions">
+            <button class="button primary" type="submit">프로필 저장</button>
+            <span class="feedback" id="profileFeedback" role="status"></span>
+          </div>
+        </form>
+      </section>
+
+      <section class="card" aria-labelledby="surveyTitle">
+        <div class="card-head">
+          <h2 id="surveyTitle">나의 성향 검사</h2>
+          <a class="button" id="surveyLink" href="survey.html">검사 시작하기</a>
+        </div>
+        <p class="type-code" id="typeCode" hidden></p>
+        <p class="muted" id="surveyMessage">저장된 검사 응답이 없어요.</p>
+        <dl class="info" id="surveyInfo" hidden></dl>
+        <div id="postFromSurvey" hidden><a class="button" id="postFromSurveyLink" href="posts.html">내 성향으로 글쓰기</a></div>
+      </section>
+
+      <section class="card" aria-labelledby="postsTitle">
+        <div class="card-head">
+          <h2 id="postsTitle">내 모집 글</h2>
+          <a class="button" href="posts.html">게시판 가기</a>
+        </div>
+        <p class="muted" id="postsMessage">아직 작성한 모집 글이 없어요.</p>
+        <ul class="activity" id="postList" hidden></ul>
+      </section>
+
+      <section class="card" aria-labelledby="chatTitle">
+        <h2 id="chatTitle">나의 채팅</h2>
+        <p class="muted" id="chatMessage">저장된 대화가 없어요. 성향 검사에서 룸메이트를 추천받고 대화를 시작해 보세요.</p>
+        <ul class="activity" id="chatList" hidden></ul>
+      </section>
+    </div>
+    <p class="muted note">프로필과 활동 내역은 이 브라우저에 저장돼요.</p>
+  </main>
+
+  <script>
+    "use strict";
+
+    const byId = id => document.getElementById(id);
+    const PROFILE_KEY = "roommate-profile-demo-v1";
+    const SURVEY_KEY = "roommate-survey";
+    const POSTS_KEY = "roommate-posts-demo-v1";
+    const CHAT_PREFIX = "roommate-chat-demo:";
+    const DEMO_AUTHOR = "local-demo-user";
+    const SURVEY_FIELDS = {
+      dorm: "생활관", smoke: "흡연 여부", snore: "코골이·잠버릇",
+      temp: "선호하는 방 온도", food: "방에서 음식 먹기"
+    };
+    const CHAT_STATUS = {
+      chatting: "대화 중", requested: "채택 요청 대기 중", matched: "매칭 완료", ended: "채팅 종료"
+    };
+
+    function readStored(key) {
+      try {
+        return JSON.parse(localStorage.getItem(key));
+      } catch {
+        return null;
+      }
+    }
+
+    function linkTo(page, params) {
+      return `${page}?${new URLSearchParams(params)}`;
+    }
+
+    function textElement(tag, text) {
+      const element = document.createElement(tag);
+      element.textContent = text;
+      return element;
+    }
+
+    function activityRow({ title, details, label, closed, href }) {
+      const item = document.createElement("li");
+      const link = document.createElement("a");
+      link.href = href;
+      const description = document.createElement("span");
+      description.append(textElement("strong", title));
+      if (details) description.append(textElement("small", details));
+      const status = textElement("span", label);
+      status.className = closed ? "tag closed" : "tag";
+      link.append(description, status);
+      item.append(link);
+      return item;
+    }
+
+    function renderActivity(listId, messageId, rows) {
+      const list = byId(listId);
+      list.replaceChildren(...rows.map(activityRow));
+      list.hidden = rows.length === 0;
+      byId(messageId).hidden = rows.length > 0;
+    }
+
+    function renderSurvey() {
+      const survey = readStored(SURVEY_KEY);
+      const details = Object.entries(SURVEY_FIELDS).filter(([key]) => typeof survey?.info?.[key] === "string" && survey.info[key]);
+      const answers = Array.from({ length: 25 }, (_, index) => survey?.answers?.[index]);
+      const answered = answers.filter(value => Number.isInteger(value) && value >= 1 && value <= 6).length;
+      const complete = answered === answers.length && details.length === Object.keys(SURVEY_FIELDS).length;
+      const code = complete && typeof survey.resultCode === "string" && /^[MN][CF][QL][HO]-[IT]$/.test(survey.resultCode)
+        ? survey.resultCode : "";
+
+      const link = byId("surveyLink");
+      link.href = complete ? "survey.html?view=result" : answered ? "survey.html?view=resume" : "survey.html";
+      link.textContent = complete ? "결과 보기" : answered ? "검사 이어 하기" : "검사 시작하기";
+      byId("typeCode").textContent = code;
+      byId("typeCode").hidden = !code;
+      byId("surveyMessage").hidden = Boolean(code);
+      byId("surveyMessage").textContent = complete ? "저장된 응답으로 성향 결과를 볼 수 있어요."
+        : answered ? `성향 문항 ${answered}/${answers.length}개에 답했어요.` : "저장된 검사 응답이 없어요.";
+      const info = byId("surveyInfo");
+      info.replaceChildren(...details.map(([key, label]) => {
+        const item = document.createElement("div");
+        item.append(textElement("dt", label), textElement("dd", survey.info[key]));
+        return item;
+      }));
+      info.hidden = details.length === 0;
+      byId("postFromSurvey").hidden = !code;
+      byId("postFromSurveyLink").href = code ? linkTo("posts.html", { type: code, compose: "1" }) : "posts.html";
+    }
+
+    function renderPosts() {
+      const saved = readStored(POSTS_KEY);
+      const posts = Array.isArray(saved) ? saved.filter(post => post?.authorId === DEMO_AUTHOR && typeof post.id === "string") : [];
+      posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      renderActivity("postList", "postsMessage", posts.map(post => ({
+        title: post.title || "(제목 없음)", details: post.dorm,
+        label: post.status === "closed" ? "모집 마감" : "모집 중",
+        closed: post.status === "closed", href: linkTo("posts.html", { post: post.id })
+      })));
+    }
+
+    function renderChats() {
+      const chats = [];
+      try {
+        for (let index = 0; index < localStorage.length; index++) {
+          const key = localStorage.key(index);
+          if (!key?.startsWith(CHAT_PREFIX)) continue;
+          const name = key.slice(CHAT_PREFIX.length);
+          const chat = readStored(key);
+          if (!name || !Array.isArray(chat?.messages) || !Object.hasOwn(CHAT_STATUS, chat.status)) continue;
+          if (chat.messages.length === 0 && chat.status === "chatting") continue;
+          chats.push({ title: name, label: CHAT_STATUS[chat.status], closed: chat.status === "ended", href: linkTo("chat.html", { with: name }) });
+        }
+      } catch {
+        // Storage can be unavailable in restricted browser sessions.
+      }
+      chats.sort((a, b) => a.title.localeCompare(b.title, "ko"));
+      renderActivity("chatList", "chatMessage", chats);
+    }
+
+    const profile = readStored(PROFILE_KEY);
+    byId("nickname").value = typeof profile?.nickname === "string" ? profile.nickname : "";
+    byId("intro").value = typeof profile?.intro === "string" ? profile.intro : "";
+
+    byId("profileForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const nickname = byId("nickname").value.trim();
+      const intro = byId("intro").value.trim();
+      const feedback = byId("profileFeedback");
+      feedback.classList.remove("error");
+      if (!nickname) {
+        feedback.textContent = "닉네임을 입력해 주세요.";
+        feedback.classList.add("error");
+        byId("nickname").focus();
+        return;
+      }
+      try {
+        localStorage.setItem(PROFILE_KEY, JSON.stringify({ nickname, intro }));
+        byId("nickname").value = nickname;
+        byId("intro").value = intro;
+        feedback.textContent = "프로필을 저장했어요.";
+      } catch {
+        feedback.textContent = "프로필을 저장할 수 없어요. 브라우저 저장 설정을 확인해 주세요.";
+        feedback.classList.add("error");
+      }
+    });
+
+    window.addEventListener("pageshow", () => {
+      renderSurvey();
+      renderPosts();
+      renderChats();
+    });
+  </script>
+</body>
+</html>
