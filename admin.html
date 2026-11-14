@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2bae7e">
+  <title>관리자 페이지 | 기숙사 성향 매칭</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Jua&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --brand: #218d68;
+      --brand-dark: #17694d;
+      --brand-soft: #e8f7ef;
+      --ink: #1b2925;
+      --muted: #53685f;
+      --line: #e4ebe6;
+      --page: #f5f8f6;
+      --danger: #a43333;
+      font-family: "IBM Plex Sans KR", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; color: var(--ink); background: var(--page); line-height: 1.6; }
+    h1, h2, p { margin: 0; }
+    h1, h2 { font-family: "Jua", sans-serif; font-weight: 400; line-height: 1.25; }
+    h1 { font-size: clamp(2rem, 6vw, 2.6rem); }
+    h2 { font-size: 1.4rem; }
+    :focus-visible { outline: 2px solid var(--brand-dark); outline-offset: 3px; }
+    .shell { width: min(100% - 32px, 1000px); margin: 0 auto; }
+    .site-header { background: white; border-bottom: 1px solid var(--line); }
+    .header-inner { min-height: 72px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-block: 12px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: var(--brand); color: white; font: 23px "Jua", sans-serif; }
+    .hero { padding: 40px 0 24px; display: grid; gap: 8px; }
+    .muted { color: var(--muted); font-size: .875rem; }
+    .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 20px; }
+    .stats div, .card { background: white; border: 1px solid var(--line); border-radius: 16px; }
+    .stats div { padding: 14px 18px; }
+    .stats dt { font-size: .875rem; color: var(--muted); }
+    .stats dd { margin: 3px 0 0; font-size: 1.45rem; font-weight: 700; }
+    .card { padding: 22px; margin-bottom: 44px; box-shadow: 0 7px 25px #24493606; }
+    .card-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+    .filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, .35fr); gap: 12px; margin: 16px 0; }
+    .field { display: grid; gap: 6px; font-size: .875rem; font-weight: 700; }
+    input, select { min-width: 0; width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid #cddbd2; border-radius: 10px; background: white; color: var(--ink); font: inherit; font-weight: 400; }
+    .button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 8px 13px; border: 0; border-radius: 10px; background: var(--brand-soft); color: var(--brand-dark); font: inherit; font-size: .875rem; font-weight: 700; text-decoration: none; cursor: pointer; }
+    .button:hover { background: #d7f1e3; }
+    .button:disabled { opacity: .6; cursor: wait; }
+    .tag { padding: 4px 9px; border-radius: 7px; background: var(--brand-soft); color: var(--brand-dark); font-size: .75rem; font-weight: 700; white-space: nowrap; }
+    .tag.closed { background: #eff2ef; color: var(--muted); }
+    .post-list { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+    details { border: 1px solid var(--line); border-radius: 10px; overflow-wrap: anywhere; }
+    summary { padding: 12px; cursor: pointer; }
+    summary .tag { margin-inline-start: 8px; }
+    .post-details { padding: 0 12px 12px; }
+    .post-body { white-space: pre-wrap; margin: 8px 0 12px; }
+    .feedback { margin-top: 8px; color: var(--brand-dark); font-size: .875rem; }
+    .feedback:empty { margin: 0; }
+    .feedback.error { color: var(--danger); }
+    @media (max-width: 520px) {
+      .hero { padding-top: 28px; }
+      .stats { gap: 8px; }
+      .stats div, .card { padding: 12px; }
+      .filters { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="shell header-inner">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">룸</span><b>기숙사 성향 매칭</b></div>
+      <a class="button" href="posts.html">모집 게시판</a>
+    </div>
+  </header>
+
+  <main class="shell">
+    <div class="hero">
+      <h1>관리자 페이지</h1>
+      <p class="muted">시연 모드에서는 이 브라우저에 저장된 모집 글을 관리할 수 있어요.</p>
+    </div>
+
+    <div id="workspace" hidden>
+      <dl class="stats" aria-label="모집 현황">
+        <div><dt>전체 글</dt><dd id="totalCount">0</dd></div>
+        <div><dt>모집 중</dt><dd id="openCount">0</dd></div>
+        <div><dt>모집 마감</dt><dd id="closedCount">0</dd></div>
+      </dl>
+      <section class="card" aria-labelledby="postsTitle">
+        <div class="card-head">
+          <h2 id="postsTitle">모집 글 관리</h2>
+          <button class="button" id="refresh" type="button">새로고침</button>
+        </div>
+        <div class="filters">
+          <label class="field">게시글 검색
+            <input id="search" type="search" placeholder="제목, 작성자, 생활관 검색">
+          </label>
+          <label class="field">모집 상태
+            <select id="filter">
+              <option value="all">전체</option>
+              <option value="open">모집 중</option>
+              <option value="closed">모집 마감</option>
+            </select>
+          </label>
+        </div>
+        <p class="muted" id="resultCount" aria-live="polite"></p>
+        <p class="feedback" id="feedback" role="status"></p>
+        <p class="muted" id="empty" hidden></p>
+        <ul class="post-list" id="postList"></ul>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    "use strict";
+
+    const byId = id => document.getElementById(id);
+    const POSTS_KEY = "roommate-posts-demo-v1";
+    const STATUS = { open: "모집 중", closed: "모집 마감" };
+    let posts = [];
+
+    function readDemoPosts() {
+      const saved = JSON.parse(localStorage.getItem(POSTS_KEY));
+      if (saved === null) return [];
+      if (!Array.isArray(saved)) throw new Error("Invalid posts storage");
+      return saved;
+    }
+
+    // 로그인 연동 시 initialize()에서 인증 상태를 확인한 뒤 화면을 표시합니다.
+    // 시연용 저장소는 서버가 모든 조회·변경 요청에서 관리자 권한을 검증하는 API로 교체합니다.
+    const adminPosts = {
+      async list() {
+        return readDemoPosts().filter(post =>
+          typeof post?.id === "string" && (post.status === "open" || post.status === "closed"));
+      },
+      async setStatus(id, expectedStatus, nextStatus) {
+        const saved = readDemoPosts();
+        const index = saved.findIndex(post => post?.id === id && post.status === expectedStatus);
+        if (index < 0) return false;
+        saved[index] = { ...saved[index], status: nextStatus, updatedAt: new Date().toISOString() };
+        localStorage.setItem(POSTS_KEY, JSON.stringify(saved));
+        return true;
+      }
+    };
+
+    function textElement(tag, text, className) {
+      const element = document.createElement(tag);
+      element.textContent = text;
+      if (className) element.className = className;
+      return element;
+    }
+
+    function feedback(text, error = false) {
+      byId("feedback").textContent = text;
+      byId("feedback").classList.toggle("error", error);
+    }
+
+    function createPostRow(post) {
+      const row = document.createElement("li");
+      const details = document.createElement("details");
+      const summary = textElement("summary", post.title || "(제목 없음)");
+      summary.append(textElement("span", STATUS[post.status], post.status === "closed" ? "tag closed" : "tag"));
+      const body = document.createElement("div");
+      body.className = "post-details";
+      const metadata = [post.authorName || "익명 학생", post.dorm, post.typeCode].filter(Boolean).join(" · ");
+      const nextStatus = post.status === "open" ? "closed" : "open";
+      const button = textElement("button", nextStatus === "closed" ? "모집 마감하기" : "모집 다시 열기", "button");
+      button.type = "button";
+      button.addEventListener("click", () => changeStatus(post, nextStatus, button));
+      body.append(textElement("p", metadata, "muted"), textElement("p", post.body || "", "post-body"), button);
+      details.append(summary, body);
+      row.append(details);
+      return row;
+    }
+
+    function render() {
+      const query = byId("search").value.trim().toLocaleLowerCase("ko-KR");
+      const filter = byId("filter").value;
+      const open = posts.filter(post => post.status === "open").length;
+      const visible = posts.filter(post => {
+        const searchText = [post.title, post.authorName, post.dorm].join(" ").toLocaleLowerCase("ko-KR");
+        return (filter === "all" || post.status === filter) && searchText.includes(query);
+      });
+
+      byId("totalCount").textContent = posts.length;
+      byId("openCount").textContent = open;
+      byId("closedCount").textContent = posts.length - open;
+      byId("resultCount").textContent = `${visible.length}개의 모집 글`;
+      byId("empty").hidden = visible.length > 0;
+      byId("empty").textContent = posts.length ? "조건에 맞는 모집 글이 없어요."
+        : "저장된 모집 글이 없어요. 게시판에서 글을 작성하면 여기에 표시돼요.";
+      byId("postList").replaceChildren(...visible.map(createPostRow));
+    }
+
+    async function refresh(message = "", error = false) {
+      try {
+        posts = (await adminPosts.list()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        render();
+        feedback(message, error);
+      } catch {
+        posts = [];
+        render();
+        byId("empty").hidden = true;
+        feedback("모집 글을 불러오지 못했어요. 브라우저 저장 설정을 확인해 주세요.", true);
+      }
+    }
+
+    async function changeStatus(post, nextStatus, button) {
+      button.disabled = true;
+      try {
+        const updated = await adminPosts.setStatus(post.id, post.status, nextStatus);
+        await refresh(updated ? `‘${post.title || "제목 없음"}’ 글을 ${STATUS[nextStatus]} 상태로 변경했어요.`
+          : "글이 이미 변경되었어요. 최신 목록을 확인해 주세요.", !updated);
+        byId("refresh").focus();
+      } catch {
+        feedback("모집 상태를 저장하지 못했어요. 다시 시도해 주세요.", true);
+        button.disabled = false;
+      }
+    }
+
+    function initialize() {
+      byId("workspace").hidden = false;
+      byId("search").addEventListener("input", render);
+      byId("filter").addEventListener("change", render);
+      byId("refresh").addEventListener("click", () => refresh());
+      window.addEventListener("pageshow", () => refresh());
+      window.addEventListener("storage", event => {
+        if (event.key === POSTS_KEY || event.key === null) refresh();
+      });
+    }
+
+    initialize();
+  </script>
+</body>
+</html>
