@@ -1,0 +1,125 @@
+rules_version = '2';
+
+// Firestore 보안 규칙
+// 배포: Firebase 콘솔 > Firestore Database > 규칙 탭에 이 파일 내용을 붙여넣고 [게시]
+// firebase.js 의 저장 구조와 맞춰져 있으므로, 필드를 바꾸면 여기도 같이 수정할 것
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMe(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // 요청에서 바뀌는 필드가 keys 안에만 있는지
+    function onlyChanges(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    // ---------- users/{uid} : 학번·이름 (본인만) ----------
+    match /users/{uid} {
+      allow read: if isMe(uid);
+      allow create: if isMe(uid)
+        && request.resource.data.keys().hasOnly(['studentId', 'name', 'createdAt'])
+        // 로그인한 계정의 학번과 같은 학번만 저장 가능
+        && request.resource.data.studentId == request.auth.token.email.split('@')[0]
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 20
+        && request.resource.data.createdAt == request.time;
+      allow update: if isMe(uid)
+        && onlyChanges(['name'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 20;
+      allow delete: if false;
+    }
+
+    // ---------- posts/{postId} : 룸메이트 모집 게시판 ----------
+    function validPostContent(d) {
+      return d.title is string && d.title.size() > 0 && d.title.size() <= 60
+        && d.body is string && d.body.size() > 0 && d.body.size() <= 1500
+        && d.dorm is string && d.dorm.size() > 0
+        && d.status in ['open', 'closed']
+        && d.typeCode is string && d.typeCode.size() <= 10;
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(
+             ['authorId', 'authorName', 'title', 'body', 'dorm', 'status', 'typeCode', 'createdAt', 'updatedAt'])
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.authorName is string
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == null
+        && validPostContent(request.resource.data);
+      allow update: if signedIn()
+        && resource.data.authorId == request.auth.uid
+        && onlyChanges(['title', 'body', 'dorm', 'status', 'typeCode', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && validPostContent(request.resource.data);
+      allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
+    }
+
+    // ---------- surveys/{uid} : 성향 검사 결과 ----------
+    // 추천 기능에서 다른 사람 결과를 봐야 하므로 로그인한 사용자는 읽기 가능
+    match /surveys/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isMe(uid)
+        && request.resource.data.keys().hasOnly(['answers', 'info', 'typeCode', 'updatedAt'])
+        && request.resource.data.answers is map
+        && request.resource.data.info is map
+        && request.resource.data.typeCode is string
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isMe(uid);
+    }
+
+    // ---------- chats/{chatId} : 1:1 채팅방 (참여자 두 명만) ----------
+    function isMember(data) {
+      return signedIn() && request.auth.uid in data.members;
+    }
+
+    match /chats/{chatId} {
+      // resource == null: 아직 없는 채팅방인지 확인하는 읽기 허용
+      allow read: if signedIn() && (resource == null || isMember(resource.data));
+      allow create: if isMember(request.resource.data)
+        && request.resource.data.members is list
+        && request.resource.data.members.size() == 2
+        // chatId = 두 uid를 정렬해 '_'로 이어 붙인 값
+        && chatId == request.resource.data.members[0] + '_' + request.resource.data.members[1]
+        && request.resource.data.status == 'chatting'
+        && request.resource.data.createdAt == request.time;
+      allow update: if isMember(resource.data)
+        && onlyChanges(['status', 'requestedBy', 'updatedAt'])
+        && request.resource.data.status in ['chatting', 'requested', 'matched', 'ended']
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        function chatData() {
+          return get(/databases/$(database)/documents/chats/$(chatId)).data;
+        }
+        allow read: if isMember(chatData());
+        allow create: if isMember(chatData())
+          && request.resource.data.keys().hasOnly(['senderId', 'text', 'type', 'createdAt'])
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 500
+          && request.resource.data.type is string
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+
+    // 위에 없는 컬렉션은 모두 차단
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
