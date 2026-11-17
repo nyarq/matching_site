@@ -160,6 +160,11 @@ form .btn { width: 100%; margin-top: 4px; }
           <h3>룸메이트 구하기</h3>
           <span>모집 글을 올리거나 다른 사람의 글을 보고 채팅을 걸어보세요.</span>
         </a>
+        <a class="card" href="admin.html" id="adminCard" hidden>
+          <div class="emoji" aria-hidden="true">🛠️</div>
+          <h3>관리자 페이지</h3>
+          <span>모집 글 숨기기·복구와 처리 이력을 관리해요.</span>
+        </a>
       </div>
     </section>
   </div>
@@ -260,6 +265,7 @@ async function render(user) {
 
   $("whoName").textContent = `${name}님`;
   $("welcome").textContent = `${name}님, 반가워요!`;
+  $("adminCard").hidden = profile?.admin !== 1;
   $("who").hidden = false;
   $("authBox").hidden = true;
   $("menuBox").hidden = false;

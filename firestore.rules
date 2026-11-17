@@ -15,6 +15,12 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    // 관리자: users/{uid}.admin == 1 (Firebase 콘솔에서만 변경 가능)
+    function isAdmin() {
+      return signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('admin', 0) == 1;
+    }
+
     // 요청에서 바뀌는 필드가 keys 안에만 있는지
     function onlyChanges(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
@@ -24,18 +30,23 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isMe(uid);
       allow create: if isMe(uid)
-        && request.resource.data.keys().hasOnly(['studentId', 'name', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['studentId', 'name', 'admin', 'createdAt'])
+        // 가입 시에는 항상 일반 사용자(0). 관리자(1)는 콘솔에서만 지정
+        && request.resource.data.admin == 0
         // 로그인한 계정의 학번과 같은 학번만 저장 가능
         && request.resource.data.studentId == request.auth.token.email.split('@')[0]
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 20
         && request.resource.data.createdAt == request.time;
+      // 마이페이지: 이름(닉네임)과 자기소개만 수정 가능. 학번은 바꿀 수 없음
       allow update: if isMe(uid)
-        && onlyChanges(['name'])
+        && onlyChanges(['name', 'intro'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 20;
+        && request.resource.data.name.size() <= 20
+        && (!('intro' in request.resource.data)
+            || (request.resource.data.intro is string && request.resource.data.intro.size() <= 120));
       allow delete: if false;
     }
 
@@ -58,12 +69,46 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == null
         && validPostContent(request.resource.data);
-      allow update: if signedIn()
-        && resource.data.authorId == request.auth.uid
-        && onlyChanges(['title', 'body', 'dorm', 'status', 'typeCode', 'updatedAt'])
-        && request.resource.data.updatedAt == request.time
-        && validPostContent(request.resource.data);
+      allow update: if
+        // 작성자: 내용·상태 수정 (관리자가 숨긴 글은 수정 불가)
+        (signedIn()
+          && resource.data.authorId == request.auth.uid
+          && resource.data.get('moderation', {}).get('hidden', false) != true
+          && onlyChanges(['title', 'body', 'dorm', 'status', 'typeCode', 'updatedAt'])
+          && request.resource.data.updatedAt == request.time
+          && validPostContent(request.resource.data))
+        // 관리자: 모집 상태 변경
+        || (isAdmin()
+          && onlyChanges(['status', 'updatedAt'])
+          && request.resource.data.status in ['open', 'closed']
+          && request.resource.data.updatedAt == request.time)
+        // 관리자: 숨기기·복구
+        || (isAdmin()
+          && onlyChanges(['moderation'])
+          && validModeration(request.resource.data.moderation));
       allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
+    }
+
+    function validModeration(m) {
+      return m is map
+        && m.keys().hasOnly(['hidden', 'hideReason', 'restoreReason', 'processedAt', 'processedBy'])
+        && m.hidden is bool
+        && m.processedAt == request.time
+        && m.processedBy == request.auth.uid;
+    }
+
+    // ---------- moderationLogs/{logId} : 관리자 숨김·복구 처리 이력 ----------
+    match /moderationLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['postId', 'title', 'action', 'reason', 'processedAt', 'adminId'])
+        && request.resource.data.action in ['hide', 'restore']
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && request.resource.data.reason.size() <= 200
+        && request.resource.data.processedAt == request.time
+        && request.resource.data.adminId == request.auth.uid;
+      allow update, delete: if false;
     }
 
     // ---------- surveys/{uid} : 성향 검사 결과 ----------
@@ -71,7 +116,9 @@ service cloud.firestore {
     match /surveys/{uid} {
       allow read: if signedIn();
       allow create, update: if isMe(uid)
-        && request.resource.data.keys().hasOnly(['answers', 'info', 'typeCode', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['name', 'answers', 'info', 'typeCode', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 20
         && request.resource.data.answers is map
         && request.resource.data.info is map
         && request.resource.data.typeCode is string
@@ -97,6 +144,10 @@ service cloud.firestore {
       allow update: if isMember(resource.data)
         && onlyChanges(['status', 'requestedBy', 'updatedAt'])
         && request.resource.data.status in ['chatting', 'requested', 'matched', 'ended']
+        // 채택 요청을 보낸 사람이 직접 수락(matched)할 수 없음
+        && !(resource.data.status == 'requested'
+             && request.resource.data.status == 'matched'
+             && resource.data.requestedBy == request.auth.uid)
         && request.resource.data.updatedAt == request.time;
       allow delete: if false;
 
