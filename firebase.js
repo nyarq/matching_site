@@ -42,12 +42,13 @@ import {
 // ---------- 1. Firebase 설정 ----------
 // Firebase 콘솔 > 프로젝트 설정 > 내 앱(웹) > SDK 설정 및 구성 에서 복사해 붙여넣기
 const firebaseConfig = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: "",
+  apiKey: "AIzaSyABxWGqxwpz5YihlLWUPf9C8P2SEEQBC2o",
+  authDomain: "matching-site-ecdc0.firebaseapp.com",
+  projectId: "matching-site-ecdc0",
+  storageBucket: "matching-site-ecdc0.firebasestorage.app",
+  messagingSenderId: "926973616118",
+  appId: "1:926973616118:web:70bc825b7f00aa18d671d7",
+  measurementId: "G-CYJ1QEMHN7",
 };
 
 export const isConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
