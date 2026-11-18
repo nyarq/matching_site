@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2bae7e">
+  <title>관리자 페이지 | 기숙사 성향 매칭</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Jua&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --brand: #218d68;
+      --brand-dark: #17694d;
+      --brand-soft: #e8f7ef;
+      --ink: #1b2925;
+      --muted: #53685f;
+      --line: #e4ebe6;
+      --page: #f5f8f6;
+      --danger: #a43333;
+      font-family: "IBM Plex Sans KR", system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; color: var(--ink); background: var(--page); line-height: 1.6; }
+    h1, h2, p { margin: 0; }
+    h1, h2 { font-family: "Jua", sans-serif; font-weight: 400; line-height: 1.25; }
+    h1 { font-size: clamp(2rem, 6vw, 2.6rem); }
+    h2 { font-size: 1.4rem; }
+    :focus-visible { outline: 2px solid var(--brand-dark); outline-offset: 3px; }
+    .shell { width: min(100% - 32px, 1000px); margin: 0 auto; }
+    .site-header { background: white; border-bottom: 1px solid var(--line); }
+    .header-inner { min-height: 72px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-block: 12px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: var(--brand); color: white; font: 23px "Jua", sans-serif; }
+    .hero { padding: 40px 0 24px; display: grid; gap: 8px; }
+    .muted { color: var(--muted); font-size: .875rem; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 20px; }
+    .stats div, .card { background: white; border: 1px solid var(--line); border-radius: 16px; }
+    .stats div { padding: 14px 18px; }
+    .stats dt { font-size: .875rem; color: var(--muted); }
+    .stats dd { margin: 3px 0 0; font-size: 1.45rem; font-weight: 700; }
+    .card { padding: 22px; margin-bottom: 44px; box-shadow: 0 7px 25px #24493606; }
+    .card-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+    .filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(130px, .35fr) minmax(130px, .35fr); gap: 12px; margin: 16px 0; }
+    .field { display: grid; gap: 6px; font-size: .875rem; font-weight: 700; }
+    input, select, textarea { min-width: 0; width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid #cddbd2; border-radius: 10px; background: white; color: var(--ink); font: inherit; font-weight: 400; }
+    .button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 8px 13px; border: 0; border-radius: 10px; background: var(--brand-soft); color: var(--brand-dark); font: inherit; font-size: .875rem; font-weight: 700; text-decoration: none; cursor: pointer; }
+    .button:hover { background: #d7f1e3; }
+    .button:disabled { opacity: .6; cursor: wait; }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .tabs [aria-selected="true"] { background: var(--brand-dark); color: white; }
+    .tag { padding: 4px 9px; border-radius: 7px; background: var(--brand-soft); color: var(--brand-dark); font-size: .75rem; font-weight: 700; white-space: nowrap; }
+    .tag.closed { background: #eff2ef; color: var(--muted); }
+    .tag.removed { background: #faeceb; color: var(--danger); }
+    .post-list { display: grid; gap: 8px; margin: 10px 0 0; padding: 0; list-style: none; }
+    details { border: 1px solid var(--line); border-radius: 10px; overflow-wrap: anywhere; }
+    summary { padding: 12px; cursor: pointer; }
+    summary .tag { margin-inline-start: 8px; }
+    .post-details { padding: 0 12px 12px; }
+    .post-body { white-space: pre-wrap; margin: 8px 0 12px; }
+    .moderation-note { margin-bottom: 12px; white-space: pre-wrap; }
+    .history-row { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; overflow-wrap: anywhere; }
+    .history-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .history-reason { white-space: pre-wrap; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    dialog { width: min(100% - 32px, 450px); border: 1px solid var(--line); border-radius: 16px; padding: 22px; color: var(--ink); }
+    dialog::backdrop { background: #10231e70; }
+    dialog form { display: grid; gap: 12px; }
+    dialog p { overflow-wrap: anywhere; }
+    textarea { resize: vertical; }
+    .feedback { margin-top: 8px; color: var(--brand-dark); font-size: .875rem; }
+    .feedback:empty { margin: 0; }
+    .feedback.error { color: var(--danger); }
+    @media (max-width: 520px) {
+      .hero { padding-top: 28px; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .stats div, .card { padding: 12px; }
+      .filters { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="shell header-inner">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">룸</span><b>기숙사 성향 매칭</b></div>
+      <a class="button" href="posts.html">모집 게시판</a>
+    </div>
+  </header>
+
+  <main class="shell">
+    <div class="hero">
+      <h1>관리자 페이지</h1>
+      <p class="muted">시연 모드에서는 이 브라우저에 저장된 모집 글을 관리할 수 있어요.</p>
+    </div>
+
+    <div id="workspace" hidden>
+      <dl class="stats" aria-label="모집 현황">
+        <div><dt>전체 글</dt><dd id="totalCount">0</dd></div>
+        <div><dt>모집 중</dt><dd id="openCount">0</dd></div>
+        <div><dt>모집 마감</dt><dd id="closedCount">0</dd></div>
+        <div><dt>숨김</dt><dd id="hiddenCount">0</dd></div>
+      </dl>
+      <div class="tabs" role="tablist" aria-label="관리 메뉴">
+        <button class="button" id="postsTab" type="button" role="tab" aria-controls="postsPanel" aria-selected="true">모집 글 관리</button>
+        <button class="button" id="historyTab" type="button" role="tab" aria-controls="historyPanel" aria-selected="false" tabindex="-1">처리 이력</button>
+      </div>
+      <section class="card" id="postsPanel" role="tabpanel" aria-labelledby="postsTab">
+        <div class="card-head">
+          <h2 id="postsTitle">모집 글 관리</h2>
+          <button class="button" id="refresh" type="button">새로고침</button>
+        </div>
+        <div class="filters">
+          <label class="field">게시글 검색
+            <input id="search" type="search" placeholder="제목, 작성자, 생활관 검색">
+          </label>
+          <label class="field">모집 상태
+            <select id="filter">
+              <option value="all">전체</option>
+              <option value="open">모집 중</option>
+              <option value="closed">모집 마감</option>
+            </select>
+          </label>
+          <label class="field">게시판 표시
+            <select id="visibilityFilter">
+              <option value="all">전체</option>
+              <option value="visible">표시 중</option>
+              <option value="hidden">숨김</option>
+            </select>
+          </label>
+        </div>
+        <p class="muted" id="resultCount" aria-live="polite"></p>
+        <p class="feedback" id="feedback" role="status"></p>
+        <p class="muted" id="empty" hidden></p>
+        <ul class="post-list" id="postList"></ul>
+      </section>
+      <section class="card" id="historyPanel" role="tabpanel" aria-labelledby="historyTab" tabindex="0" hidden>
+        <h2>처리 이력</h2>
+        <p class="feedback" id="historyMessage" role="status"></p>
+        <ol class="post-list" id="historyList"></ol>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="moderationDialog" aria-labelledby="moderationHeading">
+    <form id="moderationForm">
+      <h2 id="moderationHeading">글 숨기기</h2>
+      <p id="moderationTitle" class="muted"></p>
+      <label class="field">처리 사유
+        <textarea id="moderationReason" rows="3" maxlength="200" required autofocus></textarea>
+      </label>
+      <p id="moderationError" class="feedback error" role="status"></p>
+      <div class="actions">
+        <button class="button" id="moderationSubmit" type="submit">숨기기</button>
+        <button class="button" id="moderationCancel" type="button">취소</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    "use strict";
+
+    const byId = id => document.getElementById(id);
+    const POSTS_KEY = "roommate-posts-demo-v1";
+    const HISTORY_KEY = "roommate-moderation-history-demo-v1";
+    const STATUS = { open: "모집 중", closed: "모집 마감" };
+    const isHidden = post => post.moderation?.hidden === true;
+    const historyDate = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "medium" });
+    let posts = [];
+    let selectedPost = null;
+
+    function readDemoPosts() {
+      const saved = JSON.parse(localStorage.getItem(POSTS_KEY));
+      if (saved === null) return [];
+      if (!Array.isArray(saved)) throw new Error("Invalid posts storage");
+      return saved;
+    }
+
+    function parseDemoHistory(raw) {
+      const saved = JSON.parse(raw);
+      if (saved === null) return [];
+      if (!Array.isArray(saved)) throw new Error("Invalid moderation history");
+      return saved;
+    }
+
+    // 로그인 연동 시 initialize()에서 인증 상태를 확인한 뒤 화면을 표시합니다.
+    // 서버에서 관리자 권한을 검증하고, 표시 상태 변경과 이력 저장을 한 트랜잭션으로 처리합니다.
+    // 이력의 관리자 ID와 처리 시각은 서버가 확정합니다.
+    const adminPosts = {
+      async list() {
+        return readDemoPosts().filter(post =>
+          typeof post?.id === "string" && (post.status === "open" || post.status === "closed"));
+      },
+      async listHistory() {
+        return parseDemoHistory(localStorage.getItem(HISTORY_KEY));
+      },
+      async setStatus(id, expectedStatus, nextStatus) {
+        const saved = readDemoPosts();
+        const index = saved.findIndex(post => post?.id === id && post.status === expectedStatus && !isHidden(post));
+        if (index < 0) return false;
+        saved[index] = { ...saved[index], status: nextStatus, updatedAt: new Date().toISOString() };
+        localStorage.setItem(POSTS_KEY, JSON.stringify(saved));
+        return true;
+      },
+      async setVisibility(post, hidden, reason) {
+        const saved = readDemoPosts();
+        const index = saved.findIndex(current => current?.id === post.id &&
+          isHidden(current) === isHidden(post) && current.moderation?.processedAt === post.moderation?.processedAt);
+        if (index < 0) return false;
+        const current = saved[index];
+        const processedAt = new Date().toISOString();
+        const moderation = { hidden, hideReason: hidden ? reason : saved[index].moderation?.hideReason,
+          restoreReason: hidden ? undefined : reason, processedAt };
+        saved[index] = { ...current, moderation };
+        const before = localStorage.getItem(HISTORY_KEY);
+        const history = parseDemoHistory(before);
+        history.unshift({ postId: current.id, title: current.title || "(제목 없음)",
+          action: hidden ? "hide" : "restore", reason, processedAt });
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+        try {
+          localStorage.setItem(POSTS_KEY, JSON.stringify(saved));
+        } catch (error) {
+          if (before === null) localStorage.removeItem(HISTORY_KEY);
+          else localStorage.setItem(HISTORY_KEY, before);
+          throw error;
+        }
+        return true;
+      }
+    };
+
+    function textElement(tag, text, className) {
+      const element = document.createElement(tag);
+      element.textContent = text;
+      if (className) element.className = className;
+      return element;
+    }
+
+    function feedback(text, error = false) {
+      byId("feedback").textContent = text;
+      byId("feedback").classList.toggle("error", error);
+    }
+
+    async function refreshHistory() {
+      const message = byId("historyMessage");
+      const list = byId("historyList");
+      try {
+        const entries = await adminPosts.listHistory();
+        const rows = entries.filter(entry => entry && (entry.action === "hide" || entry.action === "restore") &&
+          typeof entry.processedAt === "string" && Number.isFinite(Date.parse(entry.processedAt)))
+          .sort((a, b) => Date.parse(b.processedAt) - Date.parse(a.processedAt)).map(entry => {
+            const row = document.createElement("li");
+            row.className = "history-row";
+            const meta = document.createElement("div");
+            meta.className = "history-meta";
+            const hidden = entry.action === "hide";
+            const time = textElement("time", historyDate.format(new Date(entry.processedAt)), "muted");
+            time.dateTime = entry.processedAt;
+            meta.append(textElement("span", hidden ? "숨김" : "복구", hidden ? "tag removed" : "tag"), time);
+            row.append(textElement("strong", entry.title), meta, textElement("p", entry.reason, "history-reason"));
+            return row;
+          });
+        list.replaceChildren(...rows);
+        message.classList.remove("error");
+        message.textContent = rows.length ? "" : "기록된 숨김·복구 이력이 없어요.";
+      } catch {
+        list.replaceChildren();
+        message.classList.add("error");
+        message.textContent = "처리 이력을 불러오지 못했어요.";
+      }
+    }
+
+    function initializeTabs() {
+      const tabs = [byId("postsTab"), byId("historyTab")];
+      function selectTab(selected) {
+        for (const tab of tabs) {
+          const active = tab === selected;
+          tab.setAttribute("aria-selected", String(active));
+          tab.tabIndex = active ? 0 : -1;
+          byId(tab.getAttribute("aria-controls")).hidden = !active;
+        }
+        if (selected === tabs[1]) refreshHistory();
+      }
+      for (const [index, tab] of tabs.entries()) {
+        tab.addEventListener("click", () => selectTab(tab));
+        tab.addEventListener("keydown", event => {
+          const next = { ArrowLeft: tabs[1 - index], ArrowRight: tabs[1 - index], Home: tabs[0], End: tabs[1] }[event.key];
+          if (!next || !(next instanceof HTMLButtonElement)) return;
+          event.preventDefault();
+          selectTab(next);
+          next.focus();
+        });
+      }
+    }
+
+    function createPostRow(post) {
+      const row = document.createElement("li");
+      const details = document.createElement("details");
+      const summary = textElement("summary", post.title || "(제목 없음)");
+      summary.append(textElement("span", STATUS[post.status], post.status === "closed" ? "tag closed" : "tag"));
+      const hidden = isHidden(post);
+      if (hidden) summary.append(textElement("span", "숨김", "tag removed"));
+      const body = document.createElement("div");
+      body.className = "post-details";
+      const metadata = [post.authorName || "익명 학생", post.dorm, post.typeCode].filter(Boolean).join(" · ");
+      const nextStatus = post.status === "open" ? "closed" : "open";
+      body.append(textElement("p", metadata, "muted"), textElement("p", post.body || "", "post-body"));
+      if (post.moderation?.hideReason) {
+        body.append(textElement("p", `숨김 사유: ${post.moderation.hideReason}`, "muted moderation-note"));
+      }
+      if (post.moderation?.restoreReason) {
+        body.append(textElement("p", `복구 사유: ${post.moderation.restoreReason}`, "muted moderation-note"));
+      }
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      if (!hidden) {
+        const button = textElement("button", nextStatus === "closed" ? "모집 마감하기" : "모집 다시 열기", "button");
+        button.type = "button";
+        button.addEventListener("click", () => changeStatus(post, nextStatus, button));
+        actions.append(button);
+      }
+      const visibilityButton = textElement("button", hidden ? "글 복구하기" : "글 숨기기", "button");
+      visibilityButton.type = "button";
+      visibilityButton.addEventListener("click", () => openModeration(post));
+      actions.append(visibilityButton);
+      body.append(actions);
+      details.append(summary, body);
+      row.append(details);
+      return row;
+    }
+
+    function render() {
+      const query = byId("search").value.trim().toLocaleLowerCase("ko-KR");
+      const filter = byId("filter").value;
+      const visibility = byId("visibilityFilter").value;
+      const open = posts.filter(post => post.status === "open").length;
+      const visible = posts.filter(post => {
+        const searchText = [post.title, post.authorName, post.dorm].join(" ").toLocaleLowerCase("ko-KR");
+        return (filter === "all" || post.status === filter) &&
+          (visibility === "all" || isHidden(post) === (visibility === "hidden")) && searchText.includes(query);
+      });
+
+      byId("totalCount").textContent = posts.length;
+      byId("openCount").textContent = open;
+      byId("closedCount").textContent = posts.length - open;
+      byId("hiddenCount").textContent = posts.filter(isHidden).length;
+      byId("resultCount").textContent = `${visible.length}개의 모집 글`;
+      byId("empty").hidden = visible.length > 0;
+      byId("empty").textContent = posts.length ? "조건에 맞는 모집 글이 없어요."
+        : "저장된 모집 글이 없어요. 게시판에서 글을 작성하면 여기에 표시돼요.";
+      byId("postList").replaceChildren(...visible.map(createPostRow));
+    }
+
+    async function refresh(message = "", error = false) {
+      try {
+        posts = (await adminPosts.list()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        render();
+        feedback(message, error);
+      } catch {
+        posts = [];
+        render();
+        byId("empty").hidden = true;
+        feedback("모집 글을 불러오지 못했어요. 브라우저 저장 설정을 확인해 주세요.", true);
+      }
+    }
+
+    async function changeStatus(post, nextStatus, button) {
+      button.disabled = true;
+      try {
+        const updated = await adminPosts.setStatus(post.id, post.status, nextStatus);
+        await refresh(updated ? `‘${post.title || "제목 없음"}’ 글을 ${STATUS[nextStatus]} 상태로 변경했어요.`
+          : "글이 이미 변경되었어요. 최신 목록을 확인해 주세요.", !updated);
+        byId("refresh").focus();
+      } catch {
+        feedback("모집 상태를 저장하지 못했어요. 다시 시도해 주세요.", true);
+        button.disabled = false;
+      }
+    }
+
+    function openModeration(post) {
+      selectedPost = post;
+      const hidden = isHidden(post);
+      byId("moderationForm").reset();
+      byId("moderationHeading").textContent = hidden ? "글 복구하기" : "글 숨기기";
+      byId("moderationTitle").textContent = post.title || "(제목 없음)";
+      byId("moderationSubmit").textContent = hidden ? "복구하기" : "숨기기";
+      byId("moderationError").textContent = "";
+      byId("moderationDialog").showModal();
+    }
+
+    async function submitModeration(event) {
+      event.preventDefault();
+      const reasonField = byId("moderationReason");
+      const reason = reasonField.value.trim();
+      const error = byId("moderationError");
+      if (!reason || reason.length > reasonField.maxLength) {
+        error.textContent = "처리 사유를 1~200자로 입력해 주세요.";
+        reasonField.focus();
+        return;
+      }
+      const post = selectedPost;
+      const hidden = !isHidden(post);
+      const submit = byId("moderationSubmit");
+      const cancel = byId("moderationCancel");
+      submit.disabled = cancel.disabled = true;
+      try {
+        const updated = await adminPosts.setVisibility(post, hidden, reason);
+        byId("moderationDialog").close();
+        const action = hidden ? "숨겼어요" : "복구했어요";
+        await refresh(updated ? `‘${post.title || "제목 없음"}’ 글을 ${action}.`
+          : "글이 이미 변경되었어요. 최신 목록을 확인해 주세요.", !updated);
+        byId("refresh").focus();
+      } catch {
+        error.textContent = "변경 내용을 저장하지 못했어요. 다시 시도해 주세요.";
+      } finally {
+        submit.disabled = cancel.disabled = false;
+      }
+    }
+
+    function initialize() {
+      byId("workspace").hidden = false;
+      initializeTabs();
+      byId("search").addEventListener("input", render);
+      byId("filter").addEventListener("change", render);
+      byId("visibilityFilter").addEventListener("change", render);
+      byId("refresh").addEventListener("click", () => refresh());
+      byId("moderationForm").addEventListener("submit", submitModeration);
+      byId("moderationCancel").addEventListener("click", () => byId("moderationDialog").close());
+      byId("moderationDialog").addEventListener("cancel", event => {
+        if (byId("moderationSubmit").disabled) event.preventDefault();
+      });
+      window.addEventListener("pageshow", () => {
+        refresh();
+        if (!byId("historyPanel").hidden) refreshHistory();
+      });
+      window.addEventListener("storage", event => {
+        if (event.key === POSTS_KEY || event.key === null) refresh();
+        if ((event.key === HISTORY_KEY || event.key === null) && !byId("historyPanel").hidden) refreshHistory();
+      });
+    }
+
+    initialize();
+  </script>
+</body>
+</html>
