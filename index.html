@@ -55,6 +55,8 @@ p { margin: 0; }
 .top .inner { display: flex; justify-content: space-between; align-items: center; width: 100%; }
 .logo { font-family: var(--font-display); font-size: 1.25rem; color: var(--cta); text-decoration: none; }
 .who { display: flex; gap: 10px; align-items: center; font-size: .9rem; }
+.who a { color: inherit; font-weight: 600; text-decoration: none; }
+.who a:hover { color: var(--cta); text-decoration: underline; }
 
 button { font: inherit; cursor: pointer; }
 .btn { border: 0; border-radius: 999px; padding: 13px 28px; font-weight: 700; background: var(--cta); color: var(--cta-ink); font-size: 1rem; }
@@ -91,7 +93,7 @@ form .btn { width: 100%; margin-top: 4px; }
   <div class="inner">
     <a class="logo" href="index.html">룸메 매칭</a>
     <div class="who" id="who" hidden>
-      <span id="whoName"></span>
+      <a id="whoName" href="mypage.html" title="마이페이지"></a>
       <button class="btn ghost small" id="logoutBtn" type="button">로그아웃</button>
     </div>
   </div>
@@ -159,6 +161,11 @@ form .btn { width: 100%; margin-top: 4px; }
           <div class="emoji" aria-hidden="true">📌</div>
           <h3>룸메이트 구하기</h3>
           <span>모집 글을 올리거나 다른 사람의 글을 보고 채팅을 걸어보세요.</span>
+        </a>
+        <a class="card" href="mypage.html">
+          <div class="emoji" aria-hidden="true">🙋</div>
+          <h3>마이페이지</h3>
+          <span>내 프로필과 검사 결과, 내가 쓴 글과 채팅을 한눈에 확인해요.</span>
         </a>
         <a class="card" href="admin.html" id="adminCard" hidden>
           <div class="emoji" aria-hidden="true">🛠️</div>
