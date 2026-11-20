@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>기숙사 룸메이트 매칭</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+html, body { margin: 0; }
+[hidden] { display: none !important; }
+
+:root {
+  --bg: #ffffff;
+  --band: #eef8f4;
+  --surface: #ffffff;
+  --ink: #2b3340;
+  --muted: #727b88;
+  --line: #e3e7ec;
+  --cta: #2bae7e;
+  --cta-ink: #ffffff;
+  --accent: #5b6cf0;
+  --warn: #d4493a;
+  --font-display: "Jua", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15191f; --band: #1a2622; --surface: #1d232b; --ink: #e8ecf1; --muted: #9ba4b0; --line: #2f3742;
+    --cta: #3cc392; --cta-ink: #0f1a15; --accent: #8391ff; --warn: #ff8576; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15191f; --band: #1a2622; --surface: #1d232b; --ink: #e8ecf1; --muted: #9ba4b0; --line: #2f3742;
+  --cta: #3cc392; --cta-ink: #0f1a15; --accent: #8391ff; --warn: #ff8576; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; }
+.pad { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.band { background: var(--band); padding-block: 48px 40px; }
+.main { padding-block: 32px 64px; }
+.inner { max-width: 760px; margin: 0 auto; display: grid; gap: 18px; }
+.center { text-align: center; justify-items: center; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; line-height: 1.25; text-wrap: balance; }
+h1 { font-size: clamp(2rem, 6vw, 2.8rem); }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.2rem; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.lead { font-size: 1.05rem; color: var(--muted); max-width: 32em; }
+
+/* top bar */
+.top { display: flex; justify-content: space-between; align-items: center; padding-block: 14px; border-bottom: 1px solid var(--line); }
+.top .inner { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+.logo { font-family: var(--font-display); font-size: 1.25rem; color: var(--cta); text-decoration: none; }
+.who { display: flex; gap: 10px; align-items: center; font-size: .9rem; }
+.who a { color: inherit; font-weight: 600; text-decoration: none; }
+.who a:hover { color: var(--cta); text-decoration: underline; }
+
+button { font: inherit; cursor: pointer; }
+.btn { border: 0; border-radius: 999px; padding: 13px 28px; font-weight: 700; background: var(--cta); color: var(--cta-ink); font-size: 1rem; }
+.btn:disabled { opacity: .6; cursor: progress; }
+.btn.small { padding: 7px 16px; font-size: .85rem; }
+.btn.ghost { background: transparent; color: var(--ink); border: 2px solid var(--line); }
+.btn:focus-visible, input:focus-visible, .tab:focus-visible, .card:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+/* auth card */
+.auth { width: 100%; max-width: 400px; margin: 0 auto; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 24px; display: grid; gap: 16px; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--band); border-radius: 999px; padding: 4px; }
+.tab { border: 0; background: transparent; color: var(--muted); border-radius: 999px; padding: 9px; font-weight: 600; }
+.tab[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / .08); }
+form { display: grid; gap: 12px; }
+label { display: grid; gap: 4px; font-size: .9rem; font-weight: 600; }
+input { font: inherit; padding: 11px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+.hint { font-size: .8rem; color: var(--muted); font-weight: 400; }
+.error { color: var(--warn); font-size: .9rem; min-height: 1.4em; }
+form .btn { width: 100%; margin-top: 4px; }
+
+/* menu cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; width: 100%; }
+.card { display: grid; gap: 6px; padding: 20px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); color: inherit; text-decoration: none; transition: border-color .15s, transform .15s; }
+.card:hover { border-color: var(--cta); transform: translateY(-2px); }
+.card .emoji { font-size: 1.8rem; }
+.card span { color: var(--muted); font-size: .9rem; }
+
+.notice { border: 1px solid var(--warn); color: var(--warn); border-radius: 12px; padding: 12px 16px; font-size: .9rem; }
+</style>
+</head>
+<body>
+
+<header class="top pad">
+  <div class="inner">
+    <a class="logo" href="index.html">룸메 매칭</a>
+    <div class="who" id="who" hidden>
+      <a id="whoName" href="mypage.html" title="마이페이지"></a>
+      <button class="btn ghost small" id="logoutBtn" type="button">로그아웃</button>
+    </div>
+  </div>
+</header>
+
+<section class="band pad">
+  <div class="inner center">
+    <h1>나랑 잘 맞는 룸메이트 찾기</h1>
+    <p class="lead">생활 성향 검사로 나의 유형을 알아보고, 같은 생활관에서 잘 맞는 룸메이트를 찾아 대화해 보세요.</p>
+  </div>
+</section>
+
+<main class="main pad">
+  <div class="inner">
+    <p class="notice" id="configNotice" hidden>Firebase 설정값이 없어 로그인을 사용할 수 없습니다. firebase.js를 확인해주세요.</p>
+    <p class="muted center" id="loading">불러오는 중…</p>
+
+    <!-- 로그인 전 -->
+    <section class="auth" id="authBox" hidden>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tabLogin" aria-selected="true" type="button">로그인</button>
+        <button class="tab" role="tab" id="tabSignup" aria-selected="false" type="button">회원가입</button>
+      </div>
+
+      <form id="loginForm" novalidate>
+        <label>학번
+          <input name="studentId" inputmode="numeric" autocomplete="username" required>
+        </label>
+        <label>비밀번호
+          <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p class="error" aria-live="polite"></p>
+        <button class="btn" type="submit">로그인</button>
+      </form>
+
+      <form id="signupForm" novalidate hidden>
+        <label>학번
+          <input name="studentId" inputmode="numeric" autocomplete="username" required>
+        </label>
+        <label>이름 <span class="hint">게시글·채팅에 표시돼요 (닉네임 가능)</span>
+          <input name="name" maxlength="20" autocomplete="nickname" required>
+        </label>
+        <label>비밀번호 <span class="hint">6자 이상</span>
+          <input name="password" type="password" autocomplete="new-password" minlength="6" required>
+        </label>
+        <label>비밀번호 확인
+          <input name="password2" type="password" autocomplete="new-password" required>
+        </label>
+        <p class="error" aria-live="polite"></p>
+        <button class="btn" type="submit">가입하기</button>
+        <p class="hint">학번은 다른 사용자에게 공개되지 않아요. 비밀번호를 잊으면 찾을 수 없으니 꼭 기억해 주세요.</p>
+      </form>
+    </section>
+
+    <!-- 로그인 후 -->
+    <section class="inner" id="menuBox" hidden>
+      <h2 id="welcome"></h2>
+      <div class="cards">
+        <a class="card" href="survey.html">
+          <div class="emoji" aria-hidden="true">📝</div>
+          <h3>생활 성향 검사</h3>
+          <span>25개 문항으로 나의 생활 유형을 알아보고 잘 맞는 룸메이트를 추천받아요.</span>
+        </a>
+        <a class="card" href="posts.html">
+          <div class="emoji" aria-hidden="true">📌</div>
+          <h3>룸메이트 구하기</h3>
+          <span>모집 글을 올리거나 다른 사람의 글을 보고 채팅을 걸어보세요.</span>
+        </a>
+        <a class="card" href="mypage.html">
+          <div class="emoji" aria-hidden="true">🙋</div>
+          <h3>마이페이지</h3>
+          <span>내 프로필과 검사 결과, 내가 쓴 글과 채팅을 한눈에 확인해요.</span>
+        </a>
+        <a class="card" href="admin.html" id="adminCard" hidden>
+          <div class="emoji" aria-hidden="true">🛠️</div>
+          <h3>관리자 페이지</h3>
+          <span>모집 글 숨기기·복구와 처리 이력을 관리해요.</span>
+        </a>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script type="module">
+import {
+  isConfigured, onUserChanged, signIn, signUp, logOut,
+  getMyProfile, authErrorMessage, validateStudentId,
+} from "./firebase.js";
+
+const $ = (id) => document.getElementById(id);
+const loginForm = $("loginForm");
+const signupForm = $("signupForm");
+
+// 로그인 후 돌아갈 페이지 (같은 사이트의 .html 파일만 허용)
+function nextPage() {
+  const next = new URLSearchParams(location.search).get("next");
+  return next && /^[\w-]+\.html(\?.*)?$/.test(next) ? next : null;
+}
+
+function showTab(which) {
+  const login = which === "login";
+  $("tabLogin").setAttribute("aria-selected", login);
+  $("tabSignup").setAttribute("aria-selected", !login);
+  loginForm.hidden = !login;
+  signupForm.hidden = login;
+}
+$("tabLogin").addEventListener("click", () => showTab("login"));
+$("tabSignup").addEventListener("click", () => showTab("signup"));
+
+async function submitWith(form, action) {
+  const errorEl = form.querySelector(".error");
+  const btn = form.querySelector("button[type=submit]");
+  errorEl.textContent = "";
+  btn.disabled = true;
+  try {
+    await action();
+  } catch (e) {
+    errorEl.textContent = e.code ? authErrorMessage(e) : e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+loginForm.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const f = new FormData(loginForm);
+  submitWith(loginForm, async () => {
+    if (!validateStudentId(f.get("studentId"))) throw new Error("학번은 숫자만 입력해주세요.");
+    if (!f.get("password")) throw new Error("비밀번호를 입력해주세요.");
+    await signIn(f.get("studentId"), f.get("password"));
+  });
+});
+
+signupForm.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const f = new FormData(signupForm);
+  submitWith(signupForm, async () => {
+    if (!validateStudentId(f.get("studentId"))) throw new Error("학번은 숫자만 입력해주세요.");
+    if (!String(f.get("name")).trim()) throw new Error("이름을 입력해주세요.");
+    if (String(f.get("password")).length < 6) throw new Error("비밀번호는 6자 이상이어야 합니다.");
+    if (f.get("password") !== f.get("password2")) throw new Error("비밀번호가 서로 다릅니다.");
+    signingUp = true;
+    try {
+      const user = await signUp(f.get("studentId"), f.get("password"), f.get("name"));
+      render(user);
+    } finally {
+      signingUp = false;
+    }
+  });
+});
+
+$("logoutBtn").addEventListener("click", () => logOut());
+
+if (!isConfigured) {
+  $("loading").hidden = true;
+  $("configNotice").hidden = false;
+}
+
+// 회원가입 중에는 users 문서 저장이 끝난 뒤 render를 직접 호출
+let signingUp = false;
+
+async function render(user) {
+  $("loading").hidden = true;
+  if (!user) {
+    $("who").hidden = true;
+    $("menuBox").hidden = true;
+    $("authBox").hidden = !isConfigured;
+    return;
+  }
+
+  const next = nextPage();
+  if (next) { location.replace(next); return; }
+
+  const profile = await getMyProfile().catch(() => null);
+  const name = profile?.name || "사용자";
+
+  $("whoName").textContent = `${name}님`;
+  $("welcome").textContent = `${name}님, 반가워요!`;
+  $("adminCard").hidden = profile?.admin !== 1;
+  $("who").hidden = false;
+  $("authBox").hidden = true;
+  $("menuBox").hidden = false;
+}
+
+onUserChanged((user) => { if (!signingUp) render(user); });
+</script>
+</body>
+</html>
