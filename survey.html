@@ -601,6 +601,7 @@ function renderResult(answers, info, isSample) {
         ${isSample ? "" : `<div id="recBox">${recommendBox("나와 잘 맞는 룸메이트 추천", "같은 생활관에서 잘 맞는 사람을 찾는 중이에요…")}</div>`}
 
         <div class="row">
+          ${isSample ? "" : `<a class="btn" href="posts.html?type=${encodeURIComponent(code)}">게시판에서 룸메이트 찾기</a>`}
           <button class="btn ghost" id="retryBtn">${isSample ? "검사 시작하기" : "다시 검사하기"}</button>
         </div>
         ${isSample ? "" : `<p class="note center" id="saveMsg" role="status"></p>`}
