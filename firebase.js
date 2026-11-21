@@ -367,12 +367,19 @@ function adminPostView(snap) {
   };
 }
 
+/**
+ * 관리자 여부. 네트워크 오류 등은 false로 바꾸지 않고 그대로 던짐
+ * → "관리자 아님"과 "확인 실패"를 호출한 쪽에서 구분할 수 있음
+ */
 export async function isAdmin() {
-  const profile = await getMyProfile().catch(() => null);
+  const profile = await getMyProfile();
   return profile?.admin === 1;
 }
 
-/** 관리자 페이지에서 호출. 비로그인 → 로그인 화면, 관리자 아님 → 메인으로 이동 */
+/**
+ * 관리자 페이지에서 호출. 비로그인 → 로그인 화면, 관리자 아님 → 메인으로 이동
+ * 권한 확인 중 오류가 나면 예외를 던지므로 호출한 쪽에서 catch로 "다시 시도" 처리
+ */
 export async function requireAdmin() {
   const user = await requireLogin();
   if (!(await isAdmin())) {
