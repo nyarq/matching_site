@@ -154,11 +154,13 @@
 
     import {
       requireLogin, getMyProfile, updateMyProfile, loadMySurvey, listMyPosts, listMyChats,
+      auth, onUserChanged,
     } from "./firebase.js";
 
     const byId = id => document.getElementById(id);
-    let user;
-    let loading = false;
+    let loadGeneration = 0;
+    let profileOwnerUid = null;
+    let savingGeneration = null;
     const SURVEY_FIELDS = {
       dorm: "생활관", smoke: "흡연 여부", snore: "코골이·잠버릇",
       temp: "선호하는 방 온도", food: "방에서 음식 먹기"
@@ -168,7 +170,7 @@
     };
 
     const dashboardData = {
-      async load() {
+      async load(accountUid) {
         const [profile, survey, posts, chats] = await Promise.all([
           getMyProfile(), loadMySurvey(), listMyPosts(), listMyChats(),
         ]);
@@ -177,7 +179,7 @@
           survey,
           posts,
           chats: chats.filter(chat => Array.isArray(chat.members)).map(chat => {
-            const partnerUid = chat.members.find(id => id !== user.uid);
+            const partnerUid = chat.members.find(id => id !== accountUid);
             return { partner: chat.names?.[partnerUid] || "상대방", partnerUid, status: chat.status };
           }).filter(chat => chat.partnerUid && Object.hasOwn(CHAT_STATUS, chat.status))
         };
@@ -266,8 +268,21 @@
       })));
     }
 
+    function setProfileBusy(busy) {
+      const form = byId("profileForm");
+      form.setAttribute("aria-busy", String(busy));
+      form.querySelectorAll("input, textarea, button").forEach(control => { control.disabled = busy; });
+    }
+
     byId("profileForm").addEventListener("submit", async event => {
       event.preventDefault();
+      const generation = loadGeneration;
+      const ownerUid = profileOwnerUid;
+      if (savingGeneration === generation) return;
+      if (!ownerUid || auth.currentUser?.uid !== ownerUid) {
+        void loadDashboard();
+        return;
+      }
       const nickname = byId("nickname").value.trim();
       const intro = byId("intro").value.trim();
       const feedback = byId("profileFeedback");
@@ -278,46 +293,54 @@
         byId("nickname").focus();
         return;
       }
-      const submit = event.currentTarget.querySelector("button[type=submit]");
-      if (submit.disabled) return;
-      submit.disabled = true;
+      savingGeneration = generation;
+      setProfileBusy(true);
       feedback.textContent = "저장하고 있어요.";
       try {
         await dashboardData.saveProfile({ nickname, intro });
+        if (generation !== loadGeneration || auth.currentUser?.uid !== ownerUid) return;
+        byId("nickname").value = nickname;
+        byId("intro").value = intro;
         feedback.textContent = "프로필을 저장했어요.";
       } catch {
+        if (generation !== loadGeneration || auth.currentUser?.uid !== ownerUid) return;
         feedback.textContent = "프로필을 저장하지 못했어요. 연결을 확인하고 다시 시도해 주세요.";
         feedback.classList.add("error");
       } finally {
-        submit.disabled = false;
+        if (generation === loadGeneration && auth.currentUser?.uid === ownerUid) setProfileBusy(false);
+        if (savingGeneration === generation) savingGeneration = null;
       }
     });
 
     async function loadDashboard() {
-      if (loading) return;
-      loading = true;
+      const generation = ++loadGeneration;
+      profileOwnerUid = null;
+      setProfileBusy(true);
       byId("dashboard").hidden = true;
       byId("retryLoad").hidden = true;
       const message = byId("pageMessage");
       message.classList.remove("error");
       message.textContent = "내 정보를 불러오고 있어요.";
       try {
-        user = await requireLogin();
-        const { profile, survey, posts, chats } = await dashboardData.load();
+        const account = await requireLogin();
+        if (generation !== loadGeneration || auth.currentUser?.uid !== account.uid) return;
+        const { profile, survey, posts, chats } = await dashboardData.load(account.uid);
+        if (generation !== loadGeneration || auth.currentUser?.uid !== account.uid) return;
         byId("nickname").value = typeof profile?.nickname === "string" ? profile.nickname : "";
         byId("intro").value = typeof profile?.intro === "string" ? profile.intro : "";
         renderSurvey(survey);
         renderPosts(posts);
         renderChats(chats);
         byId("profileFeedback").textContent = "";
+        profileOwnerUid = account.uid;
+        setProfileBusy(false);
         byId("dashboard").hidden = false;
         message.textContent = "";
       } catch {
+        if (generation !== loadGeneration) return;
         message.textContent = "내 정보를 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요.";
         message.classList.add("error");
         byId("retryLoad").hidden = false;
-      } finally {
-        loading = false;
       }
     }
 
@@ -326,9 +349,12 @@
       if (event.persisted) loadDashboard();
     });
     window.addEventListener("pagehide", () => {
+      loadGeneration++;
+      profileOwnerUid = null;
+      setProfileBusy(true);
       byId("dashboard").hidden = true;
     });
-    await loadDashboard();
+    onUserChanged(() => { void loadDashboard(); });
   </script>
 </body>
 </html>

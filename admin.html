@@ -173,6 +173,7 @@
     const historyDate = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "medium" });
     let posts = [];
     let selectedPost = null;
+    let refreshVersion = 0;
 
     // 권한 검증과 상태 변경·이력 저장 트랜잭션은 Firebase 공통 모듈에서 처리합니다.
     const adminPosts = {
@@ -306,11 +307,15 @@
     }
 
     async function refresh(message = "", error = false) {
+      const version = ++refreshVersion;
       try {
-        posts = (await adminPosts.list()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        const list = await adminPosts.list();
+        if (version !== refreshVersion) return;
+        posts = list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         render();
         feedback(message, error);
       } catch {
+        if (version !== refreshVersion) return;
         posts = [];
         render();
         byId("empty").hidden = true;
@@ -319,6 +324,7 @@
     }
 
     async function changeStatus(post, nextStatus, button) {
+      refreshVersion++;
       button.disabled = true;
       try {
         const updated = await adminPosts.setStatus(post.id, post.status, nextStatus);
@@ -353,6 +359,7 @@
         return;
       }
       const post = selectedPost;
+      refreshVersion++;
       const hidden = !isHidden(post);
       const submit = byId("moderationSubmit");
       const cancel = byId("moderationCancel");
@@ -419,6 +426,7 @@
       if (event.persisted) loadAdmin();
     });
     window.addEventListener("pagehide", () => {
+      refreshVersion++;
       byId("workspace").hidden = true;
       if (byId("moderationDialog").open) byId("moderationDialog").close();
     });
