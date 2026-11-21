@@ -251,27 +251,6 @@
       flex: 1;
     }
 
-    .reset-area {
-      padding: 0 20px 20px;
-      text-align: right;
-    }
-
-    .reset-btn {
-      border: 0;
-      background: transparent;
-      color: var(--muted);
-      text-decoration: underline;
-      padding: 5px;
-      font-size: 13px;
-    }
-
-    .demo-label {
-      font-size: 12px;
-      color: var(--muted);
-      text-align: center;
-      margin: 0 20px 16px;
-    }
-
     [hidden] {
       display: none !important;
     }
@@ -314,16 +293,16 @@
       <div class="chat-name" id="chatName">
         룸메이트와의 채팅
       </div>
-      <span class="status" id="status">대화 중</span>
+      <span class="status" id="status">연결 중</span>
     </div>
 
     <div class="messages" id="messages" aria-live="polite">
-      <p class="empty-message" id="emptyMessage">
+      <p class="empty-message">
         질문을 선택하여 대화를 시작해 보세요!
       </p>
     </div>
 
-    <section class="choices" id="chatControls">
+    <section class="choices" id="chatControls" hidden>
       <h3>대화 주제</h3>
       <div class="categories" id="categories"></div>
 
@@ -334,15 +313,16 @@
         <h3>상대방 답변 선택</h3>
         <div class="answer-list" id="answerList"></div>
         <p class="note">
-          시연용: 실제 상대방 대신 답변을 선택합니다.
+          상대방이 보낸 질문에 대한 답변을 선택하세요.
         </p>
       </div>
     </section>
 
-    <div class="actions" id="actions">
+    <div class="actions" id="actions" hidden>
       <button class="action-btn accept-btn" id="requestBtn">
         룸메이트 채택 요청
       </button>
+
       <button class="action-btn end-btn" id="endBtn">
         채팅 끝내기
       </button>
@@ -351,32 +331,34 @@
     <div class="decision-panel" id="decisionPanel" hidden>
       <h3>룸메이트 채택 요청</h3>
       <p>
-        상대방이 채택 요청을 수락할지 선택해 주세요.
-        (시연용)
+        상대방에게 받은 채택 요청을 수락할지 선택해 주세요.
       </p>
+
       <div class="decision-buttons">
         <button class="action-btn accept-btn" id="acceptBtn">
           수락하기
         </button>
+
         <button class="action-btn" id="rejectBtn">
           거절하기
         </button>
       </div>
     </div>
 
-    <p class="demo-label">
-      현재는 Firebase 연결 전, 한 브라우저에서 진행하는 시연 버전입니다.
-    </p>
-
-    <div class="reset-area">
-      <button class="reset-btn" id="resetBtn">
-        시연 초기화
-      </button>
-    </div>
-
   </main>
 
-  <script>
+  <script type="module">
+
+    import {
+      requireLogin,
+      openChat,
+      watchChat,
+      watchMessages,
+      sendMessage,
+      setChatStatus,
+      getPost
+    } from "./firebase.js";
+
     // 1. 채팅 질문과 답변 데이터
 
     const conversations = {
@@ -550,18 +532,17 @@
       ]
     };
 
-    // 2. 추천 페이지에서 상대방 정보 가져오기
+    // 2. 로그인 및 채팅 상대 확인
 
-    const params = new URLSearchParams(window.location.search);
-    const roommate = params.get("with") || "룸메이트";
+    const user = await requireLogin();
 
-    document.getElementById("chatName").textContent =
-      roommate + "님과의 채팅";
+    const params = new URLSearchParams(location.search);
+    const otherUid = params.get("with");
+    const postId = params.get("post");
 
     // 3. HTML 요소 가져오기
 
     const messagesEl = document.getElementById("messages");
-    const emptyMessageEl = document.getElementById("emptyMessage");
     const categoriesEl = document.getElementById("categories");
     const questionListEl = document.getElementById("questionList");
     const answerAreaEl = document.getElementById("answerArea");
@@ -571,51 +552,21 @@
     const decisionPanelEl = document.getElementById("decisionPanel");
     const statusEl = document.getElementById("status");
     const requestBtn = document.getElementById("requestBtn");
+    const endBtn = document.getElementById("endBtn");
 
-    // 4. 채팅 상태 관리
+    // 4. Firebase 채팅 상태 관리
 
-    const storageKey = "roommate-chat-demo:" + roommate;
+    let chatId = null;
+    let chat = null;
+    let messages = [];
+    let selectedCategory = "인사 및 기본 정보";
+    let busy = false;
 
-    function initialState() {
-      return {
-        messages: [],
-        status: "chatting",
-        selectedCategory: "인사 및 기본 정보",
-        pendingQuestion: null
-      };
-    }
+    const allQuestions = Object.values(conversations).flat();
 
-    function loadState() {
-      try {
-        const saved = JSON.parse(localStorage.getItem(storageKey));
-
-        if (
-          saved &&
-          Array.isArray(saved.messages) &&
-          ["chatting", "requested", "matched", "ended"]
-            .includes(saved.status)
-        ) {
-          return {
-            ...initialState(),
-            ...saved
-          };
-        }
-      } catch (error) {
-        console.log("저장된 대화가 없어 새로 시작합니다.");
-      }
-
-      return initialState();
-    }
-
-    let state = loadState();
-
-    function saveState() {
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(state));
-      } catch (error) {
-        console.log("대화 저장에 실패했습니다.");
-      }
-    }
+    const questionByText = new Map(
+      allQuestions.map(item => [item.question, item])
+    );
 
     // 5. 버튼 생성
 
@@ -628,50 +579,70 @@
       return button;
     }
 
-    // 6. 메시지 추가
+    // 6. 현재 답변을 기다리는 질문 확인
 
-    function addMessage(text, type) {
-      state.messages.push({ text, type });
-      saveState();
-      renderMessages();
+    function pendingQuestion() {
+      const dialogue = messages.filter(
+        msg => msg.type === "question" ||
+               msg.type === "answer"
+      );
+
+      const last = dialogue.at(-1);
+
+      if (!last || last.type !== "question") {
+        return null;
+      }
+
+      return {
+        message: last,
+        item: questionByText.get(last.text)
+      };
     }
+
+    // 7. 채팅 메시지 표시
 
     function renderMessages() {
       messagesEl.replaceChildren();
 
-      if (state.messages.length === 0) {
+      if (messages.length === 0) {
         const empty = document.createElement("p");
         empty.className = "empty-message";
         empty.textContent =
           "질문을 선택하여 대화를 시작해 보세요!";
+
         messagesEl.appendChild(empty);
         return;
       }
 
-      state.messages.forEach(item => {
+      messages.forEach(msg => {
         const bubble = document.createElement("div");
-        bubble.className = "message " + item.type;
-        bubble.textContent = item.text;
+
+        bubble.className = "message " + (
+          msg.type === "system"
+            ? "system"
+            : msg.mine ? "mine" : "other"
+        );
+
+        bubble.textContent = msg.text;
         messagesEl.appendChild(bubble);
       });
 
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
-    // 7. 대화 주제 표시
+    // 8. 대화 주제 표시
 
     function renderCategories() {
       categoriesEl.replaceChildren();
 
       Object.keys(conversations).forEach(category => {
-        const active = category === state.selectedCategory;
+        const active = category === selectedCategory;
 
         const button = makeButton(
           category,
           "category-btn" + (active ? " active" : ""),
           () => {
-            state.selectedCategory = category;
-            saveState();
+            selectedCategory = category;
             renderCategories();
             renderQuestions();
           }
@@ -681,12 +652,13 @@
       });
     }
 
-    // 8. 질문 선택지 표시
+    // 9. 질문 선택지 표시
 
     function renderQuestions() {
       questionListEl.replaceChildren();
 
-      const items = conversations[state.selectedCategory] || [];
+      const waiting = Boolean(pendingQuestion());
+      const items = conversations[selectedCategory] || [];
 
       items.forEach(item => {
         const button = makeButton(
@@ -695,23 +667,11 @@
           () => sendQuestion(item)
         );
 
+        button.disabled =
+          busy || waiting || chat?.status !== "chatting";
+
         questionListEl.appendChild(button);
       });
-    }
-
-    // 9. 질문 보내기
-
-    function sendQuestion(item) {
-      if (state.status !== "chatting") return;
-
-      if (state.pendingQuestion) {
-        alert("먼저 상대방의 답변을 선택해 주세요.");
-        return;
-      }
-
-      state.pendingQuestion = item;
-      addMessage(item.question, "mine");
-      renderAnswerChoices();
     }
 
     // 10. 답변 선택지 표시
@@ -719,146 +679,61 @@
     function renderAnswerChoices() {
       answerListEl.replaceChildren();
 
-      if (
-        state.status !== "chatting" ||
-        !state.pendingQuestion
-      ) {
-        answerAreaEl.hidden = true;
-        return;
-      }
+      const pending = pendingQuestion();
 
-      answerAreaEl.hidden = false;
+      const canAnswer =
+        chat?.status === "chatting" &&
+        pending &&
+        pending.message.senderId !== user.uid &&
+        pending.item;
 
-      state.pendingQuestion.answers.forEach(answer => {
+      answerAreaEl.hidden = !canAnswer;
+
+      if (!canAnswer) return;
+
+      pending.item.answers.forEach(answer => {
         const button = makeButton(
           answer,
           "choice-btn",
           () => sendAnswer(answer)
         );
 
+        button.disabled = busy;
         answerListEl.appendChild(button);
       });
     }
 
-    // 11. 상대방 답변 시연
-
-    function sendAnswer(answer) {
-      if (
-        state.status !== "chatting" ||
-        !state.pendingQuestion
-      ) return;
-
-      state.pendingQuestion = null;
-      addMessage(answer, "other");
-      renderAnswerChoices();
-    }
-
-    // 12. 룸메이트 채택 요청
-
-    function requestMatching() {
-      if (state.status !== "chatting") return;
-
-      if (state.pendingQuestion) {
-        alert("먼저 진행 중인 질문의 답변을 선택해 주세요.");
-        return;
-      }
-
-      const confirmed = confirm(
-        roommate + "님에게 룸메이트 채택을 요청할까요?"
-      );
-
-      if (!confirmed) return;
-
-      state.status = "requested";
-
-      addMessage(
-        "룸메이트 채택 요청을 보냈습니다.",
-        "system"
-      );
-
-      renderUI();
-    }
-
-    // 13. 상대방 수락 시연
-
-    function acceptMatching() {
-      if (state.status !== "requested") return;
-
-      state.status = "matched";
-
-      addMessage(
-        "상대방이 채택 요청을 수락했습니다. " +
-        "룸메이트 매칭이 완료되었습니다!",
-        "system"
-      );
-
-      renderUI();
-    }
-
-    // 14. 상대방 거절 시연
-
-    function rejectMatching() {
-      if (state.status !== "requested") return;
-
-      state.status = "chatting";
-
-      addMessage(
-        "상대방이 채택 요청을 거절했습니다. " +
-        "대화는 계속할 수 있습니다.",
-        "system"
-      );
-
-      renderUI();
-    }
-
-    // 15. 채팅 끝내기
-
-    function endChat() {
-      if (
-        state.status === "ended" ||
-        state.status === "matched"
-      ) return;
-
-      const confirmed = confirm(
-        "채팅을 종료하시겠습니까?\n" +
-        "종료 후에는 메시지를 보낼 수 없습니다."
-      );
-
-      if (!confirmed) return;
-
-      state.status = "ended";
-      state.pendingQuestion = null;
-
-      addMessage(
-        "채팅이 종료되었습니다.",
-        "system"
-      );
-
-      renderUI();
-    }
-
-    // 16. 현재 상태에 맞춰 화면 변경
+    // 11. 현재 채팅 상태에 따라 화면 변경
 
     function renderUI() {
       renderMessages();
 
-      const chatting = state.status === "chatting";
-      const requested = state.status === "requested";
+      const status = chat?.status;
+      const chatting = status === "chatting";
+      const requested = status === "requested";
+
+      const recipient =
+        requested && chat.requestedBy !== user.uid;
 
       chatControlsEl.hidden = !chatting;
-      actionsEl.hidden =
-        state.status === "ended" ||
-        state.status === "matched";
-
-      decisionPanelEl.hidden = !requested;
+      actionsEl.hidden = !chatting && !requested;
 
       requestBtn.hidden = !chatting;
+      requestBtn.disabled = busy;
+      endBtn.disabled = busy;
 
-      if (chatting) {
+      decisionPanelEl.hidden = !recipient;
+
+      document.getElementById("acceptBtn").disabled = busy;
+      document.getElementById("rejectBtn").disabled = busy;
+
+      if (!chat) {
+        statusEl.textContent = "연결 중";
+      } else if (chatting) {
         statusEl.textContent = "대화 중";
       } else if (requested) {
         statusEl.textContent = "채택 요청 대기 중";
-      } else if (state.status === "matched") {
+      } else if (status === "matched") {
         statusEl.textContent = "매칭 완료";
       } else {
         statusEl.textContent = "채팅 종료";
@@ -869,10 +744,171 @@
       renderAnswerChoices();
     }
 
-    // 17. 버튼에 기능 연결
+    // 12. Firebase 작업 실행 및 오류 처리
 
-    document.getElementById("requestBtn")
-      .addEventListener("click", requestMatching);
+    async function runAction(action) {
+      if (busy) return;
+
+      busy = true;
+      renderUI();
+
+      try {
+        await action();
+      } catch (error) {
+        console.error(error);
+        alert(
+          "작업에 실패했습니다: " +
+          (error?.message || "알 수 없는 오류")
+        );
+      } finally {
+        busy = false;
+        renderUI();
+      }
+    }
+
+    // 13. 질문 보내기
+
+    function sendQuestion(item) {
+      if (
+        busy ||
+        chat?.status !== "chatting" ||
+        pendingQuestion()
+      ) return;
+
+      runAction(async () => {
+        await sendMessage(
+          chatId,
+          item.question,
+          "question"
+        );
+      });
+    }
+
+    // 14. 상대방 질문에 답변하기
+
+    function sendAnswer(answer) {
+      const pending = pendingQuestion();
+
+      if (
+        busy ||
+        chat?.status !== "chatting" ||
+        !pending ||
+        pending.message.senderId === user.uid ||
+        !pending.item?.answers.includes(answer)
+      ) return;
+
+      runAction(async () => {
+        await sendMessage(
+          chatId,
+          answer,
+          "answer"
+        );
+      });
+    }
+
+    // 15. 룸메이트 채택 요청
+
+    function requestMatching() {
+      if (busy || chat?.status !== "chatting") return;
+
+      if (pendingQuestion()) {
+        alert("진행 중인 질문에 대한 답변을 기다려 주세요.");
+        return;
+      }
+
+      const confirmed = confirm(
+        "상대방에게 룸메이트 채택을 요청할까요?"
+      );
+
+      if (!confirmed) return;
+
+      runAction(async () => {
+        await sendMessage(
+          chatId,
+          "룸메이트 채택 요청을 보냈습니다.",
+          "system"
+        );
+
+        await setChatStatus(chatId, "requested");
+      });
+    }
+
+    // 16. 룸메이트 채택 수락
+
+    function acceptMatching() {
+      if (
+        busy ||
+        chat?.status !== "requested" ||
+        chat.requestedBy === user.uid
+      ) return;
+
+      runAction(async () => {
+        await sendMessage(
+          chatId,
+          "상대방이 채택 요청을 수락했습니다. " +
+          "룸메이트 매칭이 완료되었습니다!",
+          "system"
+        );
+
+        await setChatStatus(chatId, "matched");
+      });
+    }
+
+    // 17. 룸메이트 채택 거절
+
+    function rejectMatching() {
+      if (
+        busy ||
+        chat?.status !== "requested" ||
+        chat.requestedBy === user.uid
+      ) return;
+
+      runAction(async () => {
+        await sendMessage(
+          chatId,
+          "상대방이 채택 요청을 거절했습니다. " +
+          "대화는 계속할 수 있습니다.",
+          "system"
+        );
+
+        await setChatStatus(chatId, "chatting");
+      });
+    }
+
+    // 18. 채팅 종료
+
+    function endChat() {
+      if (
+        busy ||
+        !chat ||
+        chat.status === "ended" ||
+        chat.status === "matched"
+      ) return;
+
+      const confirmed = confirm(
+        "채팅을 종료하시겠습니까?\n" +
+        "종료 후에는 메시지를 보낼 수 없습니다."
+      );
+
+      if (!confirmed) return;
+
+      runAction(async () => {
+        await sendMessage(
+          chatId,
+          "채팅이 종료되었습니다.",
+          "system"
+        );
+
+        await setChatStatus(chatId, "ended");
+      });
+    }
+
+    // 19. 버튼에 기능 연결
+
+    requestBtn.addEventListener(
+      "click",
+      requestMatching
+    );
 
     document.getElementById("acceptBtn")
       .addEventListener("click", acceptMatching);
@@ -880,26 +916,61 @@
     document.getElementById("rejectBtn")
       .addEventListener("click", rejectMatching);
 
-    document.getElementById("endBtn")
-      .addEventListener("click", endChat);
+    endBtn.addEventListener(
+      "click",
+      endChat
+    );
 
-    document.getElementById("resetBtn")
-      .addEventListener("click", () => {
-        const confirmed = confirm(
-          "시연 데이터를 모두 초기화하시겠습니까?"
+    // 20. Firebase 채팅방 연결
+
+    if (!otherUid) {
+      statusEl.textContent = "상대방 정보 없음";
+
+      alert(
+        "채팅 상대 정보가 없습니다.\n" +
+        "추천 또는 게시판에서 채팅하기를 눌러 주세요."
+      );
+    } else {
+      try {
+        const post = postId
+          ? await getPost(postId)
+          : null;
+
+        chatId = await openChat(
+          otherUid,
+          postId,
+          post?.authorName || ""
         );
 
-        if (!confirmed) return;
+        watchChat(chatId, value => {
+          chat = value;
 
-        localStorage.removeItem(storageKey);
-        state = initialState();
-        renderUI();
-      });
+          document.getElementById("chatName").textContent =
+            (chat?.names?.[otherUid] || "룸메이트") +
+            "님과의 채팅";
 
-    // 18. 첫 화면 실행
+          renderUI();
+        });
 
-    renderUI();
+        watchMessages(chatId, value => {
+          messages = value;
+          renderUI();
+        });
+
+      } catch (error) {
+        console.error(error);
+
+        statusEl.textContent = "연결 실패";
+        chatControlsEl.hidden = true;
+        actionsEl.hidden = true;
+
+        alert(
+          "채팅방을 열 수 없습니다: " +
+          (error?.message || "알 수 없는 오류")
+        );
+      }
+    }
+
   </script>
-
 </body>
 </html>
