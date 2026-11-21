@@ -130,7 +130,7 @@
         <h1>함께 지낼 룸메이트를 찾아요</h1>
         <p>생활관별 모집 글을 살펴보고, 나와 잘 맞는 룸메이트를 찾아보세요.</p>
       </div>
-      <button class="primary" id="openCreate" type="button">+ 글쓰기</button>
+      <button class="primary" id="openCreate" type="button" disabled>+ 글쓰기</button>
     </section>
 
     <section class="toolbar" aria-label="게시글 검색 및 필터">
@@ -152,7 +152,9 @@
       </div>
     </section>
 
-    <p class="demo-note"><span aria-hidden="true">ⓘ</span><span><strong>개발용 시연 페이지</strong>입니다. Firebase 연결 전이므로 게시글은 이 브라우저에만 저장됩니다. 아래 기본 게시글과 작성자 권한은 예시이며, 다른 사용자와 공유되지 않습니다.</span></p>
+    <p class="demo-note"><span aria-hidden="true">ⓘ</span><span>게시글은 로그인한 사용자들과 공유됩니다. 다른 작성자의 모집 중인 글에서 채팅을 시작할 수 있어요.</span></p>
+
+    <p class="feedback hidden" id="linkFeedback" role="status"></p>
 
     <section class="board" aria-labelledby="boardTitle">
       <div class="board-head">
@@ -199,13 +201,14 @@
         </div>
         <div class="field">
           <label for="typeCode">성향 검사 유형 코드 (선택)</label>
-          <input class="control" id="typeCode" name="typeCode" maxlength="6" pattern="[a-zA-Z]{4}-[a-zA-Z]" placeholder="예: MCQH-I" autocapitalize="characters">
+          <input class="control" id="typeCode" name="typeCode" maxlength="6" pattern="[MmNn][CcFf][QqLl][HhOo]-[IiTt]" placeholder="예: MCQH-I" autocapitalize="characters">
           <p class="hint">설문 결과의 유형 코드를 적을 수 있어요. 설문 페이지에서 유효한 type 값을 전달하면 새 글에 미리 채워집니다.</p>
         </div>
         <div class="actions">
           <button class="secondary" type="button" data-close="formDialog">취소</button>
           <button class="primary" type="submit" id="submitPost">게시하기</button>
         </div>
+        <p class="feedback hidden" id="formFeedback" role="alert"></p>
       </form>
     </div>
   </dialog>
@@ -231,8 +234,8 @@
     </div>
   </dialog>
 
-  <script>
-    "use strict";
+  <script type="module">
+    import { requireLogin, listPosts, watchPosts, getPost, createPost, updatePost, deletePost } from "./firebase.js";
 
     // Keep the dormitory labels in sync with survey.html when pages are integrated.
     const DORMS = [
@@ -241,73 +244,150 @@
       "201동 솔빛관", "202동 청솔관", "203동 IH관",
       "204동 은솔관", "205동 참빛관"
     ];
-    const STORAGE_KEY = "roommate-posts-demo-v1";
-    // Demo ownership only. Firebase mode must use auth.currentUser.uid and Firestore rules.
-    const DEMO_USER_ID = "local-demo-user";
     const CHAT_PAGE = "chat.html";
-    const SAMPLE_POSTS = [
-      {
-        id: "sample-1", authorId: "sample-student-1", authorName: "익명 학생",
-        dorm: DORMS[0], status: "open", typeCode: "MCQH-I",
-        title: "101동 조용한 룸메이트 구합니다!",
-        body: "밤 11~12시쯤 잠들고 아침에 일찍 일어나는 편입니다.\n비흡연이고 방은 깔끔하게 쓰는 걸 좋아해요.\n비슷한 생활 패턴의 룸메이트를 찾습니다.",
-        createdAt: "2026-11-03T09:20:00+09:00", updatedAt: null
-      },
-      {
-        id: "sample-2", authorId: "sample-student-2", authorName: "익명 학생",
-        dorm: DORMS[6], status: "open", typeCode: "NFLH-T",
-        title: "201동 게임 좋아하는 룸메 찾아요 🎮",
-        body: "게임을 좋아하지만 밤에는 이어폰을 사용합니다.\n방에서 편하게 대화하면서 지낼 분이면 좋겠어요.",
-        createdAt: "2026-11-02T15:35:00+09:00", updatedAt: null
-      },
-      {
-        id: "sample-3", authorId: "sample-student-3", authorName: "익명 학생",
-        dorm: DORMS[8], status: "open", typeCode: "MCQO-I",
-        title: "IH관 깔끔한 룸메이트 찾습니다",
-        body: "비흡연이고 늦은 밤에는 조용한 환경을 선호합니다.\n서로 개인 시간을 존중하며 지내고 싶어요.",
-        createdAt: "2026-11-01T11:10:00+09:00", updatedAt: null
-      },
-      {
-        id: "sample-4", authorId: "sample-student-4", authorName: "익명 학생",
-        dorm: DORMS[1], status: "closed", typeCode: "",
-        title: "102동 룸메이트 모집 마감했습니다",
-        body: "관심 가져주셔서 감사합니다. 좋은 룸메이트를 찾았어요!",
-        createdAt: "2026-10-30T18:45:00+09:00", updatedAt: null
-      }
-    ];
-
     const byId = id => document.getElementById(id);
-    const copyPost = post => ({ ...post });
-    const isOwnPost = post => post.authorId === DEMO_USER_ID;
+    let user = null;
+    const isOwnPost = post => Boolean(user && post.authorId === user.uid);
+    const isHidden = post => post.moderation?.hidden === true;
+    const isVisible = post => !isHidden(post) || isOwnPost(post);
     const validType = value => /^[MN][CF][QL][HO]-[IT]$/.test(value);
-    const requestedType = new URLSearchParams(location.search).get("type")?.trim().toUpperCase() || "";
+    const pageParams = new URLSearchParams(location.search);
+    const requestedType = pageParams.get("type")?.trim().toUpperCase() || "";
     const surveyType = validType(requestedType) ? requestedType : "";
-    let storageError = "";
-    const readPosts = () => {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw === null) return SAMPLE_POSTS.map(copyPost);
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed.filter(p => p && typeof p.id === "string");
-      } catch (error) { console.warn("저장된 게시글을 불러오지 못했습니다.", error); }
-      storageError = "저장된 게시글을 불러올 수 없어 예시 글을 표시합니다. 브라우저 저장소를 확인해 주세요.";
-      return SAMPLE_POSTS.map(copyPost);
-    };
-    let posts = readPosts();
+    const hasRequestedPost = pageParams.has("post");
+    const requestedPostId = pageParams.get("post")?.trim() || "";
+    const requestedCompose = pageParams.get("compose") === "1";
+    let initialUrlHandled = false;
+    let resolvingPostLink = false;
+    let posts = [];
     let editingId = null;
     let activePostId = null;
+    let loading = true;
+    let boardError = "";
+    let submitting = false;
+    let deleting = false;
+    let chatting = false;
+    let editorBlocked = false;
+    let unsubscribe = null;
+    let refreshTimer = null;
+    let generation = 0;
+    let revision = 0;
 
-    function savePosts(nextPosts) {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextPosts));
-        posts = nextPosts;
-        storageError = "";
-        return true;
-      } catch (error) {
-        storageError = "브라우저 저장 공간을 사용할 수 없어 변경 사항을 저장하지 못했습니다.";
-        renderPosts();
-        return false;
+    function feedback(id, message) {
+      byId(id).textContent = message;
+      byId(id).classList.toggle("hidden", !message);
+    }
+
+    async function handleInitialUrl() {
+      if (initialUrlHandled || resolvingPostLink || !user) return;
+      if (hasRequestedPost) {
+        if (loading) return;
+        resolvingPostLink = true;
+        try {
+          // 첫 목록은 캐시의 일부일 수 있으므로 문서를 직접 확인합니다.
+          const post = requestedPostId ? await getPost(requestedPostId) : null;
+          initialUrlHandled = true;
+          if (post && isVisible(post)) {
+            posts = [post, ...posts.filter(item => item.id !== post.id)];
+            feedback("linkFeedback", "");
+            showDetail(post.id);
+          } else feedback("linkFeedback", "요청한 게시글이 삭제되었거나 접근할 수 없습니다. 다른 게시글을 확인해 주세요.");
+        } catch (error) {
+          feedback("linkFeedback", "게시글을 확인하지 못했습니다. " + failureMessage(error) + " 자동으로 다시 확인합니다.");
+        } finally {
+          resolvingPostLink = false;
+        }
+      } else {
+        initialUrlHandled = true;
+        if (requestedCompose) openEditor(null);
       }
+    }
+
+    function failureMessage(error) {
+      if (error?.code === "permission-denied") return "권한이 없거나 관리자가 숨긴 글입니다. 로그인 상태와 게시글 상태를 확인해 주세요.";
+      if (error?.code === "not-found") return "이미 삭제된 게시글입니다.";
+      return "연결 상태를 확인한 뒤 다시 시도해 주세요.";
+    }
+
+    function setFormBusy(busy) {
+      submitting = busy;
+      byId("postForm").querySelectorAll("input, select, textarea, button").forEach(el => { el.disabled = busy; });
+      byId("formDialog").querySelectorAll("[data-close]").forEach(el => { el.disabled = busy; });
+      byId("submitPost").disabled = busy || editorBlocked;
+      byId("openCreate").disabled = !user || busy;
+    }
+
+    // Never overwrite an in-progress draft when a remote snapshot arrives.
+    function syncDialogs() {
+      if (byId("detailDialog").open && activePostId) {
+        const post = posts.find(p => p.id === activePostId && isVisible(p));
+        if (post) showDetail(post.id, false);
+        else {
+          byId("detailTags").replaceChildren();
+          byId("detailTitle").textContent = "게시글을 볼 수 없습니다";
+          byId("detailMeta").textContent = "";
+          byId("detailBody").textContent = "삭제되었거나 관리자가 숨긴 게시글입니다.";
+          ["editPost", "deletePost", "chatPost", "chatSuggestion"].forEach(id => byId(id).classList.add("hidden"));
+          feedback("chatFeedback", "");
+        }
+      }
+      if (byId("formDialog").open && editingId) {
+        const post = posts.find(p => p.id === editingId);
+        editorBlocked = !post || !isOwnPost(post) || isHidden(post);
+        byId("submitPost").disabled = submitting || editorBlocked;
+        if (editorBlocked) feedback("formFeedback", "삭제되었거나 숨김 처리되어 수정할 수 없습니다. 입력한 내용은 유지됩니다.");
+      }
+    }
+
+    function acceptPosts(list) {
+      posts = list.filter(isVisible);
+      loading = false;
+      boardError = "";
+      renderPosts();
+      syncDialogs();
+    }
+
+    // watchPosts has no error callback. Periodic reads also surface read failures
+    // and keep the board current if the listener terminates with an error.
+    async function refreshPosts(token) {
+      const startedAt = revision;
+      try {
+        const list = await listPosts();
+        if (token !== generation) return;
+        if (startedAt === revision) acceptPosts(list);
+        // 구독 응답 때문에 목록 읽기가 생략돼도 상세 링크는 문서 조회로 처리합니다.
+        await handleInitialUrl();
+      } catch (error) {
+        if (token !== generation || startedAt !== revision) return;
+        loading = false;
+        boardError = "게시글을 새로 불러오지 못했습니다. " + failureMessage(error) + " 자동으로 다시 확인합니다.";
+        renderPosts();
+      }
+    }
+
+    function stopPosts() {
+      generation++;
+      unsubscribe?.();
+      unsubscribe = null;
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+    }
+
+    function startPosts() {
+      stopPosts();
+      const token = generation;
+      void refreshPosts(token);
+      try {
+        unsubscribe = watchPosts(list => {
+          if (token !== generation) return;
+          revision++;
+          acceptPosts(list);
+        });
+      } catch (error) {
+        boardError = "실시간 연결을 시작하지 못했습니다. 주기적으로 게시글을 다시 확인합니다.";
+        renderPosts();
+      }
+      refreshTimer = setInterval(() => { void refreshPosts(token); }, 30000);
     }
 
     function addTag(container, label, style) {
@@ -317,9 +397,18 @@
       container.appendChild(tag);
     }
 
-    function formatDate(iso) {
-      const date = new Date(iso);
-      if (Number.isNaN(date.getTime())) return "날짜 없음";
+    function asDate(value) {
+      if (value == null) return null;
+      try {
+        const date = typeof value.toDate === "function" ? value.toDate()
+          : value instanceof Date ? value : new Date(value);
+        return Number.isFinite(date.getTime()) ? date : null;
+      } catch { return null; }
+    }
+
+    function formatDate(value) {
+      const date = asDate(value);
+      if (!date) return value == null ? "날짜 확인 중" : "날짜 없음";
       return new Intl.DateTimeFormat("ko-KR", {
         year: "numeric", month: "2-digit", day: "2-digit",
         hour: "2-digit", minute: "2-digit"
@@ -330,16 +419,16 @@
       const search = byId("search").value.trim().toLocaleLowerCase("ko-KR");
       const dorm = byId("dormFilter").value;
       const status = byId("statusFilter").value;
-      const filtered = posts.filter(post => {
+      const filtered = posts.filter(isVisible).filter(post => {
         const matchesSearch = !search || ((post.title || "") + " " + (post.body || "")).toLocaleLowerCase("ko-KR").includes(search);
         return matchesSearch && (!dorm || post.dorm === dorm) && (status === "all" || post.status === status);
-      }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      }).sort((a, b) => (asDate(b.createdAt)?.getTime() ?? 0) - (asDate(a.createdAt)?.getTime() ?? 0));
 
-      byId("postCount").textContent = filtered.length + "개의 게시글";
-      byId("boardError").textContent = storageError;
-      byId("boardError").classList.toggle("hidden", !storageError);
+      byId("postCount").textContent = loading ? "게시글 불러오는 중…" : filtered.length + "개의 게시글";
+      byId("boardError").textContent = boardError;
+      byId("boardError").classList.toggle("hidden", !boardError);
       byId("postList").replaceChildren();
-      byId("emptyState").classList.toggle("hidden", filtered.length !== 0);
+      byId("emptyState").classList.toggle("hidden", loading || Boolean(boardError) || filtered.length !== 0);
 
       filtered.forEach(post => {
         const row = document.createElement("button");
@@ -351,6 +440,7 @@
         addTag(tags, post.dorm || "생활관 미정");
         addTag(tags, post.status === "closed" ? "모집 마감" : "모집 중", post.status === "closed" ? "closed" : "");
         if (isOwnPost(post)) addTag(tags, "내 글", "own");
+        if (isHidden(post)) addTag(tags, "숨김 처리됨", "closed");
         const title = document.createElement("div");
         title.className = "post-title";
         title.textContent = post.title || "(제목 없음)";
@@ -372,6 +462,10 @@
     }
 
     function openEditor(post) {
+      if (!user || submitting || (post && (!isOwnPost(post) || isHidden(post)))) return;
+      editorBlocked = false;
+      setFormBusy(false);
+      feedback("formFeedback", "");
       editingId = post ? post.id : null;
       byId("postForm").reset();
       if (!post && surveyType) byId("typeCode").value = surveyType;
@@ -388,9 +482,9 @@
       byId("title").focus();
     }
 
-    function showDetail(id) {
+    function showDetail(id, opening = true) {
       const post = posts.find(p => p.id === id);
-      if (!post) return;
+      if (!post || !isVisible(post)) return;
       activePostId = id;
       const tags = byId("detailTags");
       tags.replaceChildren();
@@ -401,16 +495,18 @@
       byId("detailMeta").textContent = (post.authorName || "익명 학생") + " · " + formatDate(post.createdAt) + (post.updatedAt ? " · 수정됨" : "");
       byId("detailBody").textContent = post.body;
       const own = isOwnPost(post);
-      byId("editPost").classList.toggle("hidden", !own);
+      if (isHidden(post)) addTag(tags, "숨김 처리됨 · 수정 불가", "closed");
+      byId("editPost").classList.toggle("hidden", !own || isHidden(post));
       byId("deletePost").classList.toggle("hidden", !own);
       const chatButton = byId("chatPost");
       chatButton.classList.toggle("hidden", own);
-      chatButton.disabled = post.status !== "open";
+      byId("deletePost").disabled = deleting;
+      byId("editPost").disabled = deleting;
+      chatButton.disabled = chatting || post.status !== "open" || isHidden(post);
       chatButton.title = chatButton.disabled ? "모집이 마감된 글에는 새 채팅을 요청할 수 없습니다." : "";
-      byId("chatSuggestion").classList.toggle("hidden", own || post.status !== "open");
-      byId("chatFeedback").textContent = "";
-      byId("chatFeedback").classList.add("hidden");
-      byId("detailDialog").showModal();
+      byId("chatSuggestion").classList.toggle("hidden", own || post.status !== "open" || isHidden(post));
+      if (opening) feedback("chatFeedback", "");
+      if (!byId("detailDialog").open) byId("detailDialog").showModal();
     }
 
     DORMS.forEach(dorm => {
@@ -427,17 +523,26 @@
       byId(id).addEventListener(id === "search" ? "input" : "change", renderPosts)
     );
     document.querySelectorAll("[data-close]").forEach(button =>
-      button.addEventListener("click", () => byId(button.dataset.close).close())
+      button.addEventListener("click", () => {
+        if (button.dataset.close === "formDialog" && submitting) return;
+        if (button.dataset.close === "detailDialog" && deleting) return;
+        byId(button.dataset.close).close();
+      })
     );
     ["formDialog", "detailDialog"].forEach(id => {
       const dialog = byId(id);
+      dialog.addEventListener("cancel", event => {
+        if ((id === "formDialog" && submitting) || (id === "detailDialog" && deleting)) event.preventDefault();
+      });
       dialog.addEventListener("click", event => {
+        if ((id === "formDialog" && submitting) || (id === "detailDialog" && deleting)) return;
         if (event.target === dialog) dialog.close();
       });
     });
 
-    byId("postForm").addEventListener("submit", event => {
+    byId("postForm").addEventListener("submit", async event => {
       event.preventDefault();
+      if (submitting || editorBlocked) return;
       const title = byId("title").value.trim();
       const dorm = byId("dorm").value;
       const body = byId("bodyText").value.trim();
@@ -452,53 +557,81 @@
         return;
       }
 
-      let nextPosts;
-      if (editingId) {
-        const post = posts.find(p => p.id === editingId);
-        if (!post || !isOwnPost(post)) return;
-        nextPosts = posts.map(p => p.id === editingId
-          ? { ...p, title, dorm, body, status, typeCode, updatedAt: new Date().toISOString() }
-          : p);
-      } else {
-        nextPosts = [{
-          id: (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "post-" + Date.now() + "-" + Math.random().toString(36).slice(2)),
-          authorId: DEMO_USER_ID, authorName: "나 (시연 사용자)",
-          title, dorm, body, status, typeCode,
-          createdAt: new Date().toISOString(), updatedAt: null
-        }, ...posts];
+      setFormBusy(true);
+      feedback("formFeedback", "저장 중입니다…");
+      let createdId = null;
+      try {
+        user = await requireLogin();
+        if (editingId) {
+          const post = await getPost(editingId);
+          if (!post || !isOwnPost(post) || isHidden(post)) {
+            feedback("formFeedback", "삭제되었거나 수정 권한이 없는 게시글입니다. 숨긴 글은 수정할 수 없습니다.");
+            return;
+          }
+          await updatePost(editingId, { title, dorm, body, status, typeCode });
+        } else {
+          createdId = await createPost({ title, body, dorm, typeCode });
+          // Retain the actual ID before the second write, including on failure.
+          editingId = createdId;
+          if (status === "closed") await updatePost(createdId, { status: "closed" });
+        }
+        byId("formDialog").close();
+        void refreshPosts(generation);
+      } catch (error) {
+        if (createdId) {
+          byId("formHeading").textContent = "생성된 모집 글 수정";
+          byId("submitPost").textContent = "다시 저장";
+          feedback("formFeedback", "글은 생성되었지만 모집 마감을 저장하지 못했습니다. 현재 모집 중으로 남아 있을 수 있습니다. 다시 저장하면 같은 글을 수정합니다. " + failureMessage(error));
+        } else feedback("formFeedback", "저장하지 못했습니다. 입력한 내용은 유지됩니다. " + failureMessage(error));
+      } finally {
+        setFormBusy(false);
       }
-      if (!savePosts(nextPosts)) return;
-      byId("formDialog").close();
-      renderPosts();
     });
 
     byId("editPost").addEventListener("click", () => {
       const post = posts.find(p => p.id === activePostId);
-      if (!post || !isOwnPost(post)) return;
+      if (deleting || !post || !isOwnPost(post) || isHidden(post)) return;
       byId("detailDialog").close();
       openEditor(post);
     });
-    byId("deletePost").addEventListener("click", () => {
+    byId("deletePost").addEventListener("click", async () => {
       const post = posts.find(p => p.id === activePostId);
-      if (!post || !isOwnPost(post)) return;
+      if (deleting || !post || !isOwnPost(post)) return;
       if (!confirm("이 게시글을 삭제하시겠습니까?")) return;
-      if (!savePosts(posts.filter(p => p.id !== post.id))) return;
-      byId("detailDialog").close();
-      renderPosts();
+      deleting = true;
+      byId("deletePost").disabled = true;
+      byId("editPost").disabled = true;
+      feedback("chatFeedback", "삭제 중입니다…");
+      try {
+        user = await requireLogin();
+        const latest = await getPost(post.id);
+        if (latest && !isOwnPost(latest)) throw { code: "permission-denied" };
+        if (latest) await deletePost(post.id);
+        byId("detailDialog").close();
+        void refreshPosts(generation);
+      } catch (error) {
+        feedback("chatFeedback", "삭제하지 못했습니다. " + failureMessage(error));
+      } finally {
+        deleting = false;
+        byId("deletePost").disabled = false;
+        byId("editPost").disabled = false;
+      }
     });
     byId("chatPost").addEventListener("click", async () => {
-      const post = posts.find(p => p.id === activePostId);
-      if (!post || isOwnPost(post) || post.status !== "open") return;
-      const feedback = byId("chatFeedback");
-      feedback.classList.remove("hidden");
-      if (SAMPLE_POSTS.some(sample => sample.id === post.id) || !post.authorId) {
-        feedback.textContent = "예시 글에는 실제 작성자 계정이 없어 채팅할 수 없습니다.";
-        return;
-      }
+      const id = activePostId;
+      const initial = posts.find(p => p.id === id);
+      if (chatting || !initial || isOwnPost(initial) || initial.status !== "open" || isHidden(initial)) return;
+      chatting = true;
       const button = byId("chatPost");
       button.disabled = true;
-      feedback.textContent = "채팅 페이지를 확인하고 있습니다…";
+      feedback("chatFeedback", "채팅 페이지를 확인하고 있습니다…");
       try {
+        user = await requireLogin();
+        const post = await getPost(id);
+        if (!post || isOwnPost(post) || post.status !== "open" || isHidden(post) || !post.authorId) {
+          feedback("chatFeedback", "삭제되었거나 모집이 마감/숨김 처리되어 채팅을 시작할 수 없습니다.");
+          return;
+        }
         const url = new URL(CHAT_PAGE, location.href);
         const response = await fetch(url, { method: "GET", cache: "no-store" });
         if (!response.ok || new URL(response.url).pathname !== url.pathname) throw new Error("Chat page unavailable");
@@ -507,13 +640,35 @@
         // Contract: chat.html reads `with` (author UID) and `post` (post document ID).
         url.searchParams.set("with", post.authorId);
         url.searchParams.set("post", post.id);
-        location.assign(url.href);
+        const latest = await getPost(id);
+        if (!latest || latest.authorId !== post.authorId || latest.status !== "open" || isHidden(latest)) {
+          feedback("chatFeedback", "게시글 상태가 변경되어 채팅을 시작할 수 없습니다.");
+          return;
+        }
+        if (activePostId === id && byId("detailDialog").open) location.assign(url.href);
       } catch (error) {
-        feedback.textContent = "채팅 페이지가 아직 준비되지 않았습니다. 나중에 다시 시도해 주세요.";
-        button.disabled = false;
+        if (activePostId === id) feedback("chatFeedback", "채팅 페이지를 열 수 없습니다. 연결 상태를 확인하거나 나중에 다시 시도해 주세요.");
+      } finally {
+        chatting = false;
+        const latest = posts.find(p => p.id === activePostId);
+        button.disabled = !latest || latest.status !== "open" || isHidden(latest);
       }
     });
+    window.addEventListener("pagehide", stopPosts);
+    window.addEventListener("pageshow", event => {
+      if (event.persisted && user) startPosts();
+    });
     renderPosts();
+    try {
+      user = await requireLogin();
+      byId("openCreate").disabled = false;
+      handleInitialUrl();
+      startPosts();
+    } catch (error) {
+      loading = false;
+      boardError = "로그인 상태를 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요.";
+      renderPosts();
+    }
   </script>
 </body>
 </html>

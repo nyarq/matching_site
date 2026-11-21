@@ -183,7 +183,9 @@ a.btn { display: inline-block; text-decoration: none; text-align: center; }
         <button class="btn" id="startBtn">검사 시작하기</button>
         <button class="btn ghost" id="sampleBtn">예시 결과 보기</button>
       </div>
-      <p class="note">약 5분 소요 · 결과는 이 브라우저에만 저장돼요</p>
+      <p class="note">약 5분 소요 · 결과는 내 계정에 저장돼요</p>
+      <p class="note" id="savedResultMessage" role="status" hidden></p>
+      <button class="btn ghost" id="retryResultBtn" type="button" hidden>결과 다시 불러오기</button>
     </div>
   </section>
   <section class="main">
@@ -212,7 +214,12 @@ a.btn { display: inline-block; text-decoration: none; text-align: center; }
 <!-- 결과 화면 -->
 <div id="result" hidden></div>
 
-<script>
+<script type="module">
+import { requireLogin, saveSurvey, listSurveys, loadMySurvey } from "./firebase.js";
+
+// 로그인 안 했으면 index.html로 갔다가 로그인 후 다시 이 페이지로 돌아옴
+const user = await requireLogin();
+
 const AXES = [
   { key: "time", name: "생활 시간", color: "var(--c-time)",
     left:  { code: "M", label: "아침형" },
@@ -409,18 +416,8 @@ function overallText(by) {
 }
 
 // ---------- 룸메이트 추천 ----------
-// 신청자 정보가 아직 저장되지 않아서 예시 후보로 추천을 보여줌.
+// 같은 생활관에서 검사를 마친 실제 사용자 중에서 추천 (firebase.js의 listSurveys 사용)
 // r: 각 성향의 오른쪽 비율(0~100). time 저녁형, clean 여유형, sound 활발형, stay 외출형, social 함께형 쪽일수록 큼
-const CANDIDATES = [
-  { id: "후보 A", r: { time: 76, clean: 24, sound: 28, stay: 44, social: 32 }, info: { dorm: "205동 참빛관", smoke: "비흡연", snore: "없음", temp: "시원하게", food: "간단한 것만" } },
-  { id: "후보 B", r: { time: 20, clean: 16, sound: 24, stay: 68, social: 40 }, info: { dorm: "205동 참빛관", smoke: "비흡연", snore: "없음", temp: "보통", food: "싫음" } },
-  { id: "후보 C", r: { time: 84, clean: 72, sound: 80, stay: 36, social: 88 }, info: { dorm: "205동 참빛관", smoke: "비흡연", snore: "조금 있음", temp: "따뜻하게", food: "괜찮음" } },
-  { id: "후보 D", r: { time: 64, clean: 36, sound: 44, stay: 80, social: 56 }, info: { dorm: "205동 참빛관", smoke: "비흡연", snore: "없음", temp: "시원하게", food: "환기하면 괜찮음" } },
-  { id: "후보 E", r: { time: 88, clean: 28, sound: 20, stay: 24, social: 16 }, info: { dorm: "205동 참빛관", smoke: "흡연", snore: "없음", temp: "보통", food: "간단한 것만" } },
-  { id: "후보 F", r: { time: 32, clean: 60, sound: 56, stay: 72, social: 76 }, info: { dorm: "204동 은솔관", smoke: "비흡연", snore: "있음", temp: "따뜻하게", food: "괜찮음" } },
-  { id: "후보 G", r: { time: 72, clean: 44, sound: 32, stay: 60, social: 28 }, info: { dorm: "104동 다솔관", smoke: "비흡연", snore: "있음", temp: "시원하게", food: "간단한 것만" } },
-  { id: "후보 H", r: { time: 56, clean: 20, sound: 36, stay: 28, social: 64 }, info: { dorm: "205동 참빛관", smoke: "비흡연", snore: "없음", temp: "보통", food: "환기하면 괜찮음" } },
-];
 
 // 성향별 중요도(합 1). 생활 시간·청결·소리가 갈등에 가장 큰 영향을 준다고 보고 비중을 높게 둠
 const AX = Object.fromEntries(AXES.map(a => [a.key, a]));
@@ -428,7 +425,8 @@ const AX = Object.fromEntries(AXES.map(a => [a.key, a]));
 // 채팅 페이지 주소. 채팅 페이지 담당자와 정한 파일 이름과 맞춰야 함
 // 버튼을 누르면 chat.html?with=상대ID 로 이동하고, 채팅 페이지가 with 값을 읽어 그 사람과의 채팅방을 연다
 const CHAT_PAGE = "chat.html";
-function chatLink(id) { return `${CHAT_PAGE}?with=${encodeURIComponent(id)}`; }
+// name도 같이 넘겨서 채팅 페이지가 상대 이름을 보여줄 수 있게 함
+function chatLink(id, name) { return `${CHAT_PAGE}?with=${encodeURIComponent(id)}&name=${encodeURIComponent(name)}`; }
 
 const WEIGHTS = { time: 0.3, clean: 0.25, sound: 0.25, stay: 0.1, social: 0.1 };
 
@@ -504,23 +502,23 @@ function matchWith(me, cand) {
   return { cand, score, good, warn };
 }
 
-function recommendHtml(res, info) {
+function recommendHtml(res, info, candidates) {
   const me = { r: Object.fromEntries(res.map(x => [x.a.key, x.r])), info };
-  const all = CANDIDATES.map(c => matchWith(me, c));
+  const all = candidates.map(c => matchWith(me, c));
   const excluded = all.filter(m => m === null).length;
   const top = all.filter(Boolean).sort((a, b) => b.score - a.score).slice(0, 3);
 
   return `
         <div class="card">
           <h2>나와 잘 맞는 룸메이트 추천</h2>
-          <p class="muted">같은 생활관 신청자 중에서 성향과 생활 정보를 비교해 잘 맞는 순서로 추천해요.</p>
-          <p class="note">지금은 예시 후보 ${CANDIDATES.length}명 중에서 추천해요. 신청자 정보가 저장되면 실제 신청자 중에서 추천돼요.</p>
+          <p class="muted">같은 생활관에서 검사를 마친 사람 중에서 성향과 생활 정보를 비교해 잘 맞는 순서로 추천해요.</p>
+          ${top.length ? "" : `<p class="note">아직 추천할 사람이 없어요. 같은 생활관 사람들이 검사를 마치면 여기에 추천이 나타나요.</p>`}
           <div class="recs">
             ${top.map((m, i) => `
             <div class="rec ${i === 0 ? "best" : ""}">
               <div class="rec-top">
                 ${i === 0 ? `<span class="rec-tag">가장 잘 맞아요</span>` : ""}
-                <b>${esc(m.cand.id)}</b>
+                <b>${esc(m.cand.name)}</b>
                 <span class="rec-code">${codeOf(m.cand.r)}</span>
                 <strong class="rec-score">${m.score}%</strong>
               </div>
@@ -528,15 +526,39 @@ function recommendHtml(res, info) {
               ${m.good.length ? `<h4>잘 맞는 점</h4><ul>${m.good.map(t => `<li>${t}</li>`).join("")}</ul>` : ""}
               ${m.warn.length ? `<h4>미리 정하면 좋은 점</h4><ul class="warn">${m.warn.map(t => `<li>${t}</li>`).join("")}</ul>` : ""}
               <div class="rec-actions">
-                <a class="btn sm" href="${chatLink(m.cand.id)}">${esc(m.cand.id)}님과 채팅하기</a>
+                <a class="btn sm" href="${chatLink(m.cand.id, m.cand.name)}">${esc(m.cand.name)}님과 채팅하기</a>
               </div>
             </div>`).join("")}
           </div>
-          ${excluded ? `<p class="note">생활관이나 흡연 여부가 달라서 제외된 후보 ${excluded}명</p>` : ""}
+          ${excluded ? `<p class="note">흡연 여부가 달라서 제외된 사람 ${excluded}명</p>` : ""}
         </div>`;
 }
 
-function renderResult(answers, info, isSample) {
+function recommendBox(title, text) {
+  return `<div class="card"><h2>${title}</h2><p class="muted">${text}</p></div>`;
+}
+
+// 같은 생활관 사용자를 불러와 추천 화면을 채움. 25문항을 다 답한 사람만 비교함
+async function loadRecommendations(res, info) {
+  const box = $("#recBox");
+  try {
+    const people = await listSurveys(info.dorm);
+    const candidates = people
+      .filter(p => p.info && p.answers && QUESTIONS.every((q, i) => p.answers[i] >= 1 && p.answers[i] <= 6))
+      .map(p => ({
+        id: p.uid,
+        name: p.name || "익명",
+        r: Object.fromEntries(AXES.map(a => [a.key, rightPercent(a.key, p.answers)])),
+        info: p.info,
+      }));
+    box.innerHTML = recommendHtml(res, info, candidates);
+  } catch (e) {
+    console.error(e);
+    box.innerHTML = recommendBox("나와 잘 맞는 룸메이트 추천", "추천을 불러오지 못했어요. 잠시 후 다시 검사를 마쳐 주세요.");
+  }
+}
+
+function renderResult(answers, info, isSample, saveResult = true) {
   const res = analyze(answers);
   const by = Object.fromEntries(res.map(x => [x.a.key, x]));
   const code = res.slice(0, 4).map(x => x.pole.code).join("") + "-" + res[4].pole.code;
@@ -578,11 +600,13 @@ function renderResult(answers, info, isSample) {
             }).join("")}
           </div>
         </div>
-${recommendHtml(res, info)}
+        ${isSample ? "" : `<div id="recBox">${recommendBox("나와 잘 맞는 룸메이트 추천", "같은 생활관에서 잘 맞는 사람을 찾는 중이에요…")}</div>`}
 
         <div class="row">
+          ${isSample ? "" : `<a class="btn" href="posts.html?type=${encodeURIComponent(code)}">게시판에서 룸메이트 찾기</a>`}
           <button class="btn ghost" id="retryBtn">${isSample ? "검사 시작하기" : "다시 검사하기"}</button>
         </div>
+        ${isSample ? "" : `<p class="note center" id="saveMsg" role="status"></p>`}
       </div>
     </section>`;
 
@@ -591,6 +615,28 @@ ${recommendHtml(res, info)}
     state.step = 0; save(); show("#quiz"); renderStep();
   });
   show("#result");
+  if (!isSample) {
+    if (saveResult) {
+      // 새 검사를 마칠 때만 결과를 저장합니다.
+      storeResult(answers, info, code).then(() => loadRecommendations(res, info));
+    } else {
+      $("#saveMsg").textContent = "내 계정에 저장된 검사 결과예요.";
+      void loadRecommendations(res, info);
+    }
+  }
+}
+
+// 검사를 마치면 결과를 Firestore(surveys/내UID)에 저장. 다시 검사하면 덮어씀
+async function storeResult(answers, info, code) {
+  const msg = $("#saveMsg");
+  msg.textContent = "결과를 저장하는 중이에요…";
+  try {
+    await saveSurvey({ answers, info, typeCode: code });
+    msg.textContent = "결과가 내 계정에 저장됐어요. 마이페이지에서 다시 볼 수 있어요.";
+  } catch (e) {
+    console.error(e);
+    msg.textContent = "결과를 저장하지 못했어요. 인터넷 연결을 확인하고 다시 검사를 마쳐 주세요.";
+  }
 }
 
 $("#startBtn").addEventListener("click", () => { state.step = 0; show("#quiz"); renderStep(); });
@@ -612,6 +658,54 @@ $("#nextBtn").addEventListener("click", () => {
 load();
 
 renderIntro();
+
+const requestedView = new URLSearchParams(location.search).get("view");
+let loadingSavedResult = false;
+function isAnswer(value) {
+  return Number.isInteger(value) && value >= 1 && value <= LIKERT.length;
+}
+
+async function openRequestedView() {
+  if (loadingSavedResult || !["result", "resume"].includes(requestedView)) return;
+  loadingSavedResult = true;
+  const message = $("#savedResultMessage");
+  message.hidden = false;
+  message.textContent = "저장된 검사 정보를 불러오고 있어요…";
+  $("#retryResultBtn").hidden = true;
+  $("#startBtn").disabled = $("#sampleBtn").disabled = true;
+  try {
+    const saved = await loadMySurvey();
+    const answers = saved?.answers || {};
+    const info = saved?.info || {};
+    const complete = QUESTIONS.every((_, index) => isAnswer(answers[index])) &&
+      INFO.every(field => field.options.includes(info[field.key]));
+    if (complete && requestedView === "result") {
+      renderResult(answers, info, false, false);
+    } else if (requestedView === "resume") {
+      // 계정에 저장된 유효한 응답만 사용합니다.
+      state.answers = Object.fromEntries(QUESTIONS.map((_, index) => [index, answers[index]])
+        .filter(([, value]) => isAnswer(value)));
+      state.info = Object.fromEntries(INFO.filter(field => field.options.includes(info[field.key]))
+        .map(field => [field.key, info[field.key]]));
+      const missing = QUESTIONS.findIndex((_, index) => !isAnswer(state.answers[index]));
+      state.step = missing < 0 ? QPAGES : Math.floor(missing / PER_PAGE);
+      show("#quiz");
+      renderStep();
+    } else {
+      message.textContent = "완료된 검사 결과가 없어요. 검사를 진행해 주세요.";
+    }
+  } catch (error) {
+    console.error(error);
+    message.textContent = "검사 결과를 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요.";
+    $("#retryResultBtn").hidden = false;
+  } finally {
+    loadingSavedResult = false;
+    $("#startBtn").disabled = $("#sampleBtn").disabled = false;
+  }
+}
+
+$("#retryResultBtn").addEventListener("click", openRequestedView);
+await openRequestedView();
 </script>
 </body>
 </html>

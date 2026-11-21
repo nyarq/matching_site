@@ -53,6 +53,7 @@
     .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .button { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 10px; padding: 8px 13px; background: var(--brand-soft); color: var(--brand-dark); text-decoration: none; font: 700 .875rem/1.5 "IBM Plex Sans KR", system-ui, sans-serif; cursor: pointer; }
     .button:hover { background: #d7f1e3; }
+    .button:disabled { opacity: .6; cursor: wait; }
     .button.primary { background: var(--brand-dark); color: white; }
     .button.primary:hover { background: #12583f; }
     .feedback { color: var(--brand-dark); font-size: .875rem; }
@@ -71,7 +72,6 @@
     .tag { flex: none; padding: 4px 8px; border-radius: 7px; background: var(--brand-soft); color: var(--brand-dark); font-size: .75rem; font-weight: 700; }
     .tag.closed { background: #eff2ef; color: var(--muted); }
     .tag.moderated { background: #faeceb; color: #a43333; }
-    .note { padding: 17px 0 45px; }
     @media (max-width: 650px) {
       .dashboard { grid-template-columns: 1fr; }
       .card { padding: 18px; }
@@ -87,7 +87,7 @@
         <div><b>기숙사 성향 매칭</b><small>나에게 맞는 룸메이트 찾기</small></div>
       </div>
       <nav aria-label="주 메뉴">
-        <!-- 팀의 메인 화면 경로가 확정되면 이곳에 홈 링크를 추가합니다. 메인 화면에서는 mypage.html로 연결합니다. -->
+        <a href="index.html">홈</a>
         <a href="survey.html">성향 검사</a>
         <a href="posts.html">모집 게시판</a>
         <a href="mypage.html" aria-current="page">마이페이지</a>
@@ -100,7 +100,9 @@
       <h1>마이페이지</h1>
       <p class="muted">내 프로필과 룸메이트 찾기 활동을 한곳에서 확인해요.</p>
     </div>
-    <div class="dashboard">
+    <p class="feedback" id="pageMessage" role="status">로그인 정보를 확인하고 있어요.</p>
+    <button class="button" id="retryLoad" type="button" hidden>다시 불러오기</button>
+    <div class="dashboard" id="dashboard" hidden>
       <section class="card" aria-labelledby="profileTitle">
         <h2 id="profileTitle">내 프로필</h2>
         <form id="profileForm">
@@ -145,14 +147,20 @@
         <ul class="activity" id="chatList" hidden></ul>
       </section>
     </div>
-    <p class="muted note">프로필과 활동 내역은 이 브라우저에 저장돼요.</p>
   </main>
 
-  <script>
+  <script type="module">
     "use strict";
 
+    import {
+      requireLogin, getMyProfile, updateMyProfile, loadMySurvey, listMyPosts, listMyChats,
+      auth, onUserChanged,
+    } from "./firebase.js";
+
     const byId = id => document.getElementById(id);
-    const POSTS_KEY = "roommate-posts-demo-v1";
+    let loadGeneration = 0;
+    let profileOwnerUid = null;
+    let savingGeneration = null;
     const SURVEY_FIELDS = {
       dorm: "생활관", smoke: "흡연 여부", snore: "코골이·잠버릇",
       temp: "선호하는 방 온도", food: "방에서 음식 먹기"
@@ -161,54 +169,25 @@
       chatting: "대화 중", requested: "채택 요청 대기 중", matched: "매칭 완료", ended: "채팅 종료"
     };
 
-    function readStored(key) {
-      try {
-        return JSON.parse(localStorage.getItem(key));
-      } catch {
-        return null;
-      }
-    }
-
-    // 로그인 연동 시 인증 상태를 먼저 확인한 뒤, 아래 저장소를 로그인한 UID의
-    // 데이터만 읽고 쓰는 API로 교체합니다. 시연용 데이터는 계정으로 자동 복사하지 않습니다.
     const dashboardData = {
-      load() {
+      async load(accountUid) {
+        const [profile, survey, posts, chats] = await Promise.all([
+          getMyProfile(), loadMySurvey(), listMyPosts(), listMyChats(),
+        ]);
         return {
-          profile: readStored("roommate-profile-demo-v1"),
-          survey: readStored("roommate-survey"),
-          posts: this.loadPosts(),
-          chats: readDemoChats()
+          profile: { nickname: profile?.name ?? "", intro: profile?.intro ?? "" },
+          survey,
+          posts,
+          chats: chats.filter(chat => Array.isArray(chat.members)).map(chat => {
+            const partnerUid = chat.members.find(id => id !== accountUid);
+            return { partner: chat.names?.[partnerUid] || "상대방", partnerUid, status: chat.status };
+          }).filter(chat => chat.partnerUid && Object.hasOwn(CHAT_STATUS, chat.status))
         };
       },
-      loadPosts() {
-        const savedPosts = readStored(POSTS_KEY);
-        return Array.isArray(savedPosts)
-          ? savedPosts.filter(post => post?.authorId === "local-demo-user" && typeof post.id === "string")
-          : [];
-      },
-      saveProfile(profile) {
-        localStorage.setItem("roommate-profile-demo-v1", JSON.stringify(profile));
+      saveProfile({ nickname, intro }) {
+        return updateMyProfile({ name: nickname, intro });
       }
     };
-
-    function readDemoChats() {
-      const prefix = "roommate-chat-demo:";
-      const chats = [];
-      try {
-        for (let index = 0; index < localStorage.length; index++) {
-          const key = localStorage.key(index);
-          if (!key?.startsWith(prefix)) continue;
-          const partner = key.slice(prefix.length);
-          const chat = readStored(key);
-          if (!partner || !Array.isArray(chat?.messages) || !Object.hasOwn(CHAT_STATUS, chat.status)) continue;
-          if (chat.messages.length === 0 && chat.status === "chatting") continue;
-          chats.push({ partner, status: chat.status });
-        }
-      } catch {
-        // 브라우저에서 저장소 사용을 제한할 수 있습니다.
-      }
-      return chats;
-    }
 
     function linkTo(page, params) {
       return `${page}?${new URLSearchParams(params)}`;
@@ -247,8 +226,8 @@
       const answers = Array.from({ length: 25 }, (_, index) => survey?.answers?.[index]);
       const answered = answers.filter(value => Number.isInteger(value) && value >= 1 && value <= 6).length;
       const complete = answered === answers.length && details.length === Object.keys(SURVEY_FIELDS).length;
-      const code = complete && typeof survey.resultCode === "string" && /^[MN][CF][QL][HO]-[IT]$/.test(survey.resultCode)
-        ? survey.resultCode : "";
+      const code = complete && typeof survey.typeCode === "string" && /^[MN][CF][QL][HO]-[IT]$/.test(survey.typeCode)
+        ? survey.typeCode : "";
 
       const link = byId("surveyLink");
       link.href = complete ? "survey.html?view=result" : answered ? "survey.html?view=resume" : "survey.html";
@@ -270,7 +249,6 @@
     }
 
     function renderPosts(posts) {
-      posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       renderActivity("postList", "postsMessage", posts.map(post => {
         const moderated = post.moderation?.hidden === true;
         return {
@@ -286,46 +264,97 @@
       chats.sort((a, b) => a.partner.localeCompare(b.partner, "ko"));
       renderActivity("chatList", "chatMessage", chats.map(chat => ({
         title: chat.partner, label: CHAT_STATUS[chat.status], closed: chat.status === "ended",
-        href: linkTo("chat.html", { with: chat.partner })
+        href: linkTo("chat.html", { with: chat.partnerUid })
       })));
     }
 
-    byId("profileForm").addEventListener("submit", event => {
+    function setProfileBusy(busy) {
+      const form = byId("profileForm");
+      form.setAttribute("aria-busy", String(busy));
+      form.querySelectorAll("input, textarea, button").forEach(control => { control.disabled = busy; });
+    }
+
+    byId("profileForm").addEventListener("submit", async event => {
       event.preventDefault();
+      const generation = loadGeneration;
+      const ownerUid = profileOwnerUid;
+      if (savingGeneration === generation) return;
+      if (!ownerUid || auth.currentUser?.uid !== ownerUid) {
+        void loadDashboard();
+        return;
+      }
       const nickname = byId("nickname").value.trim();
       const intro = byId("intro").value.trim();
       const feedback = byId("profileFeedback");
       feedback.classList.remove("error");
-      if (!nickname) {
-        feedback.textContent = "닉네임을 입력해 주세요.";
+      if (!nickname || nickname.length > 20 || intro.length > 120) {
+        feedback.textContent = "닉네임은 1~20자, 소개는 120자 이내로 입력해 주세요.";
         feedback.classList.add("error");
         byId("nickname").focus();
         return;
       }
+      savingGeneration = generation;
+      setProfileBusy(true);
+      feedback.textContent = "저장하고 있어요.";
       try {
-        dashboardData.saveProfile({ nickname, intro });
+        await dashboardData.saveProfile({ nickname, intro });
+        if (generation !== loadGeneration || auth.currentUser?.uid !== ownerUid) return;
         byId("nickname").value = nickname;
         byId("intro").value = intro;
         feedback.textContent = "프로필을 저장했어요.";
       } catch {
-        feedback.textContent = "프로필을 저장할 수 없어요. 브라우저 저장 설정을 확인해 주세요.";
+        if (generation !== loadGeneration || auth.currentUser?.uid !== ownerUid) return;
+        feedback.textContent = "프로필을 저장하지 못했어요. 연결을 확인하고 다시 시도해 주세요.";
         feedback.classList.add("error");
+      } finally {
+        if (generation === loadGeneration && auth.currentUser?.uid === ownerUid) setProfileBusy(false);
+        if (savingGeneration === generation) savingGeneration = null;
       }
     });
 
-    window.addEventListener("pageshow", event => {
-      const { profile, survey, posts, chats } = dashboardData.load();
-      if (!event.persisted) {
+    async function loadDashboard() {
+      const generation = ++loadGeneration;
+      profileOwnerUid = null;
+      setProfileBusy(true);
+      byId("dashboard").hidden = true;
+      byId("retryLoad").hidden = true;
+      const message = byId("pageMessage");
+      message.classList.remove("error");
+      message.textContent = "내 정보를 불러오고 있어요.";
+      try {
+        const account = await requireLogin();
+        if (generation !== loadGeneration || auth.currentUser?.uid !== account.uid) return;
+        const { profile, survey, posts, chats } = await dashboardData.load(account.uid);
+        if (generation !== loadGeneration || auth.currentUser?.uid !== account.uid) return;
         byId("nickname").value = typeof profile?.nickname === "string" ? profile.nickname : "";
         byId("intro").value = typeof profile?.intro === "string" ? profile.intro : "";
+        renderSurvey(survey);
+        renderPosts(posts);
+        renderChats(chats);
+        byId("profileFeedback").textContent = "";
+        profileOwnerUid = account.uid;
+        setProfileBusy(false);
+        byId("dashboard").hidden = false;
+        message.textContent = "";
+      } catch {
+        if (generation !== loadGeneration) return;
+        message.textContent = "내 정보를 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요.";
+        message.classList.add("error");
+        byId("retryLoad").hidden = false;
       }
-      renderSurvey(survey);
-      renderPosts(posts);
-      renderChats(chats);
+    }
+
+    byId("retryLoad").addEventListener("click", loadDashboard);
+    window.addEventListener("pageshow", event => {
+      if (event.persisted) loadDashboard();
     });
-    window.addEventListener("storage", event => {
-      if (event.key === POSTS_KEY || event.key === null) renderPosts(dashboardData.loadPosts());
+    window.addEventListener("pagehide", () => {
+      loadGeneration++;
+      profileOwnerUid = null;
+      setProfileBusy(true);
+      byId("dashboard").hidden = true;
     });
+    onUserChanged(() => { void loadDashboard(); });
   </script>
 </body>
 </html>
