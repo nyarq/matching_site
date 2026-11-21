@@ -183,7 +183,7 @@ a.btn { display: inline-block; text-decoration: none; text-align: center; }
         <button class="btn" id="startBtn">검사 시작하기</button>
         <button class="btn ghost" id="sampleBtn">예시 결과 보기</button>
       </div>
-      <p class="note">약 5분 소요 · 결과는 이 브라우저에만 저장돼요</p>
+      <p class="note">약 5분 소요 · 결과는 내 계정에 저장돼요</p>
     </div>
   </section>
   <section class="main">
@@ -212,7 +212,12 @@ a.btn { display: inline-block; text-decoration: none; text-align: center; }
 <!-- 결과 화면 -->
 <div id="result" hidden></div>
 
-<script>
+<script type="module">
+import { requireLogin, saveSurvey } from "./firebase.js";
+
+// 로그인 안 했으면 index.html로 갔다가 로그인 후 다시 이 페이지로 돌아옴
+const user = await requireLogin();
+
 const AXES = [
   { key: "time", name: "생활 시간", color: "var(--c-time)",
     left:  { code: "M", label: "아침형" },
@@ -583,6 +588,7 @@ ${recommendHtml(res, info)}
         <div class="row">
           <button class="btn ghost" id="retryBtn">${isSample ? "검사 시작하기" : "다시 검사하기"}</button>
         </div>
+        ${isSample ? "" : `<p class="note center" id="saveMsg" role="status"></p>`}
       </div>
     </section>`;
 
@@ -591,6 +597,20 @@ ${recommendHtml(res, info)}
     state.step = 0; save(); show("#quiz"); renderStep();
   });
   show("#result");
+  if (!isSample) storeResult(answers, info, code);
+}
+
+// 검사를 마치면 결과를 Firestore(surveys/내UID)에 저장. 다시 검사하면 덮어씀
+async function storeResult(answers, info, code) {
+  const msg = $("#saveMsg");
+  msg.textContent = "결과를 저장하는 중이에요…";
+  try {
+    await saveSurvey({ answers, info, typeCode: code });
+    msg.textContent = "결과가 내 계정에 저장됐어요. 마이페이지에서 다시 볼 수 있어요.";
+  } catch (e) {
+    console.error(e);
+    msg.textContent = "결과를 저장하지 못했어요. 인터넷 연결을 확인하고 다시 검사를 마쳐 주세요.";
+  }
 }
 
 $("#startBtn").addEventListener("click", () => { state.step = 0; show("#quiz"); renderStep(); });
