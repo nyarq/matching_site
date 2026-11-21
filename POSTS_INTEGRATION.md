@@ -1,211 +1,108 @@
 # 게시판 페이지 연동 가이드
 
-현재 `posts.html`은 브라우저의 **localStorage를 사용하는 시연용 페이지**입니다.
+`posts.html`은 기존 `firebase.js`의 Authentication / Firestore API를 사용합니다.
+`FIREBASE_GUIDE.md` 0·1절, 현재 `firebase.js` 및 `firestore.rules`가 실제 계약입니다.
+기존 localStorage 게시글·예시 작성자는 사용하거나 Firestore로 이전하지 않습니다.
+HTTP 서버(Live Server 등)에서 실행해야 하며, 로그인은 기존 `requireLogin()`에 맡깁니다.
 
-현재 저장소에는 Firebase 설정, Firestore 보안 규칙, `chat.html` 파일이 없습니다.
+## 데이터 및 저장
 
-예시 게시글에는 임의로 생성한 ID가 사용되므로 실제 채팅 상대를 식별할 수 없습니다.
+- `listPosts()`로 초기 목록을 읽고 `watchPosts(callback)`으로 실시간 갱신합니다.
+- `watchPosts`에는 오류 콜백 인자가 없습니다. 30초마다 `listPosts()`로 다시 읽어
+  읽기 실패를 안내하고, 리스너가 종료된 경우에도 목록을 갱신합니다.
+  리스너 자체의 비동기 오류 원인은 페이지에서 직접 받을 수 없습니다.
+- 페이지를 떠날 때 구독·타이머를 해제하고, 뒤로 가기 캐시 복원 시 다시 시작합니다.
+- 제목·본문 검색, 11개 생활관, open/closed/all 필터는 목록 갱신 후에도 유지됩니다.
+- 날짜는 Timestamp.toDate(), Date, ISO 문자열을 처리하며 null/잘못된 값은
+  안내 문구로 표시합니다. 작성 시각 내림차순이며 날짜 미확정 글은 뒤에 표시됩니다.
 
-또한 `local-demo-user`를 이용한 작성자 권한 확인은 UI 시연용 기능일 뿐이며, 실제 사용자 간의 보안을 보장하지 않습니다.
+| 필드 | 페이지의 처리 |
+| --- | --- |
+| `id` | Firestore 문서 ID. 로컬에서 생성하지 않음 |
+| `title` | 필수, 공백 제거 후 1–60자 |
+| `body` | 필수, 공백 제거 후 1–1500자 |
+| `dorm` | 기존 11개 생활관 중 하나 |
+| `status` | `open` 또는 `closed` |
+| `typeCode` | 선택 사항, 없으면 빈 문자열. `^[MN][CF][QL][HO]-[IT]$` |
+| `authorId`, `authorName`, `createdAt`, `updatedAt` | 공용 모듈에서 생성·관리, 페이지에서 쓰지 않음 |
+| `moderation` | 기존 관리자 처리 결과를 읽기만 함 |
 
-## 1. Firebase 및 사용자 인증 연동
+새 글은 `createPost({ title, body, dorm, typeCode })`로 생성합니다.
+공용 함수는 항상 open으로 생성하므로 closed를 선택하면 반환된 ID로
+`updatePost(id, { status: "closed" })`를 추가 호출합니다. 두 호출은 원자적이지 않아
+잠시 open으로 보일 수 있습니다. 두 번째 호출이 실패하면 생성 사실과 마감 저장 실패를
+명확히 알리고 입력값·문서 ID를 유지합니다. ‘다시 저장’은 같은 글을 수정하며 중복 생성하지 않습니다.
 
-팀에서 Firebase 설정과 로그인 기능을 제공하면 Firestore에 `posts` 컬렉션을 사용합니다.
+수정은 `getPost(id)`로 최신 권한·숨김 여부를 확인한 뒤
+`updatePost(id, { title, dorm, body, status, typeCode })`를 호출합니다.
+삭제는 기존 확인창 후 `getPost(id)` 및 `deletePost(id)`를 사용합니다.
+실패 시 해당 대화상자와 입력값을 유지하며, 저장/삭제 중 중복 클릭을 막습니다.
+다른 사용자에 의해 변경된 상세 정보는 갱신하고, 삭제·숨김으로 볼 수 없게 된 글은
+본문 대신 안내를 표시합니다. 수정 중인 입력값은 원격 갱신으로 덮어쓰지 않습니다.
 
-각 게시글의 문서 ID를 게시글 ID로 사용합니다.
+## 권한 및 관리자 숨김
 
-### 게시글 데이터 구조
+실제 로그인 사용자 UID와 `post.authorId`를 비교해 ‘내 글’ 및 수정·삭제를 표시합니다.
+숨긴 글은 작성자에게만 표시하고 수정은 차단하며 삭제는 허용합니다.
+다른 작성자의 숨긴 글은 목록/상세/채팅 대상에서 제외합니다.
+최종 쓰기 권한은 Firestore 보안 규칙이 검사합니다.
+현재 규칙의 게시글 읽기는 `allow read: if true`입니다. 숨김은 공용 모듈 및
+페이지의 표시 정책이며, 문서 읽기 자체를 금지하는 보안 기능은 아닙니다.
+이 연동을 위해 공용 모듈이나 규칙 변경은 필요하지 않습니다.
 
-| 필드         | 자료형              | 설명                                                           |
-| ------------ | ------------------- | -------------------------------------------------------------- |
-| `authorId`   | string              | Firebase Authentication의 `currentUser.uid`. 작성 후 변경 불가 |
-| `authorName` | string              | 화면에 표시할 작성자 이름. 권한 확인에는 사용하지 않음         |
-| `title`      | string              | 게시글 제목. 필수 입력, 최대 60자                              |
-| `body`       | string              | 게시글 내용. 필수 입력, 최대 1500자                            |
-| `dorm`       | string              | 페이지에서 제공하는 11개 생활관 중 하나                        |
-| `status`     | string              | 모집 상태: `open` 또는 `closed`                                |
-| `typeCode`   | string              | 선택 사항. `MCQH-I`와 같은 성향 검사 유형 코드                 |
-| `createdAt`  | timestamp           | 서버 기준 작성 시간. 변경 불가                                 |
-| `updatedAt`  | timestamp 또는 null | 게시글 수정 시 서버 기준 수정 시간                             |
+## 성향 코드 및 채팅 계약
 
-게시글은 `createdAt`을 기준으로 최신순으로 표시합니다.
+코드는 표준 MBTI가 아닌 프로젝트의 5축 코드입니다(예: `MCQH-I`, `NCQH-I`).
+수동 입력을 지원하며 입력은 대문자로 정규화합니다.
+`posts.html?type=MCQH-I`의 유효한 값은 **새 글**에만 미리 채웁니다.
+잘못된 코드는 적용하지 않으며, 수정 시에는 저장된 코드를 사용합니다.
 
-초기 버전에서는 불러온 게시글을 브라우저에서 검색 및 필터링할 수 있습니다. 서버 기반 페이지네이션이나 전체 텍스트 검색은 추후 별도로 결정해야 합니다.
+마이페이지에서 전달하는 URL도 지원합니다.
 
-### 작성자 권한 및 보안
+- `posts.html?post=POST_ID`: 로그인 및 첫 목록 로드 성공 후 실제 Firestore 목록에서
+  해당 문서를 찾아 상세창을 엽니다. 화면의 open 필터와 무관하게 closed 글도 열며,
+  기존 숨김 정책을 그대로 적용합니다. 삭제되었거나 접근할 수 없는 글은 별도의
+  한국어 안내를 표시하고 게시판은 계속 사용할 수 있습니다.
+- `posts.html?type=MCQH-I&compose=1`: 로그인 확인 직후 새 글 작성창을 열고
+  유효한 성향 코드를 미리 채웁니다. 목록 로딩 성공 여부와 무관하게 작성창을 엽니다.
+- `post`와 `compose`가 함께 있으면 `post`가 우선합니다. 빈 post 값도 접근 불가
+  안내 대상으로 처리하며 작성창으로 전환하지 않습니다.
+- URL 동작은 페이지에서 한 번만 처리합니다. 실시간 갱신, 주기적 재조회,
+  뒤로 가기 캐시 복원으로 닫은 창이 자동으로 다시 열리지 않습니다.
+  `type`만 있으면 기존처럼 사용자가 글쓰기를 눌렀을 때 미리 채웁니다.
 
-게시글 작성 시 Firebase Authentication에서 제공하는 실제 사용자 UID를 사용해야 합니다.
-
-예시 게시글은 공용 Firestore 데이터베이스로 이전하지 않습니다.
-
-현재의 시연용 작성자 확인 로직은 로그인한 사용자의 UID를 기준으로 변경해야 합니다.
-
-또한 같은 권한 확인을 Firestore 보안 규칙에서도 적용해야 합니다.
-
-다음은 기본적인 보안 규칙의 예시입니다.
-
-```javascript
-match /posts/{postId} {
-  allow read: if true;
-  allow create: if request.auth != null
-    && request.resource.data.authorId == request.auth.uid;
-  allow update: if request.auth != null
-    && resource.data.authorId == request.auth.uid
-    && request.resource.data.authorId == resource.data.authorId
-    && request.resource.data.createdAt == resource.data.createdAt;
-  allow delete: if request.auth != null
-    && resource.data.authorId == request.auth.uid;
-}
-```
-
-**주의:** 위 규칙은 연동을 위한 제안이며, 실제 배포된 규칙이 아닙니다.
-
-Firebase 및 Firestore 담당자는 최종 데이터 구조에 맞게 필드 검증을 추가하고, 보안 규칙을 확인한 뒤 배포해야 합니다.
-
-## 2. 채팅 페이지 연동
-
-다른 사용자가 작성한 게시글이 `모집 중(open)` 상태일 경우, **채팅하기** 버튼을 통해 채팅 페이지로 이동하도록 설계했습니다.
-
-이동할 URL 형식은 다음과 같습니다.
-
-`chat.html?with=AUTHOR_UID&post=POST_ID`
-
-### URL 파라미터
-
-- `with`: 게시글 작성자의 Firebase Authentication UID
-- `post`: 해당 게시글의 Firestore 문서 ID
-
-두 값은 URL에 사용할 수 있도록 인코딩됩니다.
-
-### 채팅 페이지에서 구현해야 할 기능
-
-채팅 페이지 담당자는 다음 사항을 구현해야 합니다.
-
-1. URL에서 `with`와 `post` 파라미터를 읽습니다.
-2. 사용자의 로그인 상태를 확인합니다.
-3. Firestore의 `posts/{POST_ID}` 문서를 불러옵니다.
-4. 게시글의 `authorId`가 `with` 값과 일치하는지 확인합니다.
-5. 채팅 화면에 원본 게시글의 정보를 표시합니다.
-    - 제목 (`title`)
-    - 생활관 (`dorm`)
-    - 모집 상태 (`status`)
-6. 게시글이 삭제되었거나 존재하지 않는 경우를 처리합니다.
-7. 채팅 화면에 진입한 후 모집 상태가 변경된 경우도 처리합니다.
-
-채팅 페이지로 이동하는 것만으로 메시지가 자동 전송되어서는 안 됩니다.
-
-### 첫 메시지 추천 문구
-
-사용자가 직접 선택하여 보낼 수 있는 첫 메시지 예시입니다.
-
-> 안녕하세요! 룸메이트 구하는 게시글 보고 연락드렸어요. 아직 구하고 계신가요?
-
-현재 게시판 페이지에서는 이동 전에 `chat.html` 파일에 접근할 수 있는지 확인합니다.
-
-채팅 페이지가 아직 준비되지 않았다면 안내 메시지를 표시합니다.
-
-**실제 채팅 기능과 게시글 미리보기 구현은 채팅 페이지 담당자의 작업 범위입니다.**
-
-## 3. 성향 검사 페이지 연동
-
-현재 성향 검사 페이지에서는 동일한 11개 생활관 목록을 사용하고 있습니다.
-
-성향 검사 결과는 다음과 같은 형식의 코드로 표현됩니다.
-
-`MCQH-I`
-
-설문 페이지에서는 응답 및 생활관 정보를 `roommate-survey`에 저장하지만, 계산된 최종 성향 유형 코드는 별도로 저장하지 않습니다.
-
-### 현재 게시판의 지원 기능
-
-게시글 작성 시 사용자가 성향 유형 코드를 직접 입력할 수 있습니다.
-
-또한 다음과 같은 URL 파라미터를 지원합니다.
-
-`posts.html?type=MCQH-I`
-
-유효한 유형 코드가 전달되면 새 게시글 작성 화면의 성향 코드 입력란에 자동으로 입력됩니다.
-
-잘못된 형식의 코드는 적용되지 않습니다.
-
-성향 검사 페이지 담당자와 연동 방식이 확정되면 설문 결과 페이지에서 위 URL로 이동하는 버튼을 추가할 수 있습니다.
-
-**현재 게시판 연동을 위해 설문 문항이나 검사 로직을 수정할 필요는 없습니다.**
-
-# Posts page integration contract
-
-`posts.html` currently runs as a **browser localStorage demo**. The checkout has no
-Firebase app configuration, Firestore rules, or `chat.html`. Sample posts have
-invented IDs and are never valid chat recipients. The demo's `local-demo-user`
-ownership check is only a UI simulation; it provides no security between users.
-
-## Firestore and Authentication
-
-When the team provides a Firebase configuration and sign-in flow, use a `posts`
-collection. Each document ID is the post ID. Document fields are:
-
-| Field        | Type              | Meaning                                              |
-| ------------ | ----------------- | ---------------------------------------------------- |
-| `authorId`   | string            | Firebase Authentication `currentUser.uid`; immutable |
-| `authorName` | string            | Display label, never an authorization source         |
-| `title`      | string            | Required, at most 60 characters                      |
-| `body`       | string            | Required, at most 1500 characters                    |
-| `dorm`       | string            | One of the 11 dormitory labels on the page           |
-| `status`     | string            | `open` or `closed`                                   |
-| `typeCode`   | string            | Optional five-axis code such as `MCQH-I`             |
-| `createdAt`  | timestamp         | Server timestamp, immutable                          |
-| `updatedAt`  | timestamp or null | Server timestamp on edits                            |
-
-Read posts newest first by `createdAt`. Search can initially filter loaded posts
-client-side; server pagination or full-text search needs a separate decision.
-On write, use Firebase Auth's actual UID. Never migrate sample posts to shared
-Firestore. Replace the demo ownership check with the signed-in UID and enforce
-the same check in Firestore security rules. Proposed minimum rule shape (adapt
-field validation to the final schema):
-
-```js
-match /posts/{postId} {
-  allow read: if true;
-  allow create: if request.auth != null
-    && request.resource.data.authorId == request.auth.uid;
-  allow update: if request.auth != null
-    && resource.data.authorId == request.auth.uid
-    && request.resource.data.authorId == resource.data.authorId
-    && request.resource.data.createdAt == resource.data.createdAt;
-  allow delete: if request.auth != null
-    && resource.data.authorId == request.auth.uid;
-}
-```
-
-These rules are an integration proposal, **not deployed rules**. The team's
-Firestore rules owner must validate the complete field schema and deploy them
-with the Firebase integration before shared writes are enabled.
-
-## Chat handoff
-
-For a different author's open post, `posts.html` navigates to:
+다른 작성자의 open 글은 다음 주소로 이동합니다.
 
 `chat.html?with=AUTHOR_UID&post=POST_ID`
 
-Both values are URL encoded. `AUTHOR_UID` must be the post document's
-`authorId`, which must come from Firebase Authentication. `POST_ID` must be the
-Firestore document ID. The chat page should read both query parameters, verify
-the user is signed in, load `posts/{POST_ID}`, verify its `authorId` matches
-`with`, and show a preview with `title`, `dorm`, and `status`. It should handle
-missing or deleted posts and a status change after the link was opened. It
-should not send a message on navigation. Suggested first message:
+`URL.searchParams`로 실제 `post.authorId`와 문서 ID를 인코딩합니다.
+본인 글은 채팅 버튼을 숨기고 closed 글에서는 비활성화합니다.
+이동 전 최신 게시글 상태와 `chat.html` 접근 가능 여부를 확인하고 실패를 안내합니다.
+페이지 이동만으로 메시지를 보내지 않습니다.
+채팅 담당자는 기존 가이드대로 두 파라미터, 원본 글, 작성자 일치 여부 및 이후 상태 변경을
+처리해야 합니다. 이 작업에서는 `chat.html`을 수정하지 않습니다.
 
-> 안녕하세요! 룸메이트 구하는 게시글 보고 연락드렸어요. 아직 구하고 계신가요?
+## 검증 및 수동 확인
 
-The posts page checks that `chat.html` can be fetched before navigating and
-shows an unavailable message if it cannot. The chat developer owns the actual
-conversation and preview implementation.
+로컬 JavaScript 구문 검사와 모의 DOM/API 실행으로 필터, 날짜, 코드, 권한,
+CRUD 성공·실패, 생성 후 마감 실패 재시도, 중복 제출, 채팅 URL, 구독 해제를 확인했습니다.
+추가 모의 테스트로 post/compose URL, closed 글, 숨김 권한, 없는 문서 안내,
+우선순위, 로그인·목록 로딩 대기, 코드 prefill 및 자동 열기 1회 처리를 확인했습니다.
+이는 실제 브라우저나 Firebase 계정으로 검증한 결과가 아닙니다.
 
-## Survey handoff
+실제 Firebase에서는 서로 다른 두 계정(A/B)과 별도 관리자 계정으로 확인하세요.
 
-The survey branch uses the same 11 dormitory labels and computes codes in the
-form `MCQH-I`. It stores answers and dormitory info under `roommate-survey`, but
-does not persist the computed result code. This page keeps manual type entry.
-It also accepts `posts.html?type=MCQH-I` to prefill a new post; only valid codes
-are accepted. The survey developer can add a link with that query parameter
-after agreeing on the flow. No questionnaire changes are required here.
+1. 로그아웃 상태에서 게시판 접속 → 기존 로그인 화면 이동 및 복귀.
+2. `?type=MCQH-I`로 접속 → 새 글 코드 자동 입력. 잘못된 코드 무시, 수동 입력·길이·필수값 검증.
+3. A가 open/closed 글 작성 → B 화면에 실시간 표시, 최신순·개수·빈 상태·검색/필터 유지.
+4. A만 수정·삭제 가능, 수정 시 모든 필드 미리 채움. B의 open 글은 채팅 가능,
+   closed 글은 불가. 채팅 주소의 UID/문서 ID 및 자동 메시지 미전송 확인.
+5. 관리자 숨김 → A는 숨김 표시·수정 불가·삭제 가능, B는 글을 볼 수 없음. 복구 시 재표시.
+6. 상세창을 열어 둔 채 다른 탭에서 수정·마감·삭제·숨김 → 상태 갱신 및 안내.
+7. 네트워크 실패 시 입력값/대화상자 유지, 재시도 및 중복 클릭 확인.
+   생성만 성공하고 마감 저장이 실패한 경우에는 경고 후 같은 문서에 재시도되는지 확인
+   (두 번째 API 호출만 실패시키는 테스트 설정이 필요할 수 있음).
+8. 뒤로 가기/복귀 후 목록 갱신, 채팅 파일 접근 실패 시 안내 확인.
+9. 마이페이지의 게시글 링크로 open/closed/본인 숨김 글을 열고, 삭제된 글과
+   다른 작성자의 숨김 글은 안내되는지 확인. 작성 링크의 코드 자동 입력,
+   post 우선순위 및 창을 닫은 뒤 실시간 갱신으로 다시 열리지 않는지도 확인.
