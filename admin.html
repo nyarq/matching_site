@@ -85,16 +85,18 @@
   <header class="site-header">
     <div class="shell header-inner">
       <div class="brand"><span class="brand-mark" aria-hidden="true">룸</span><b>기숙사 성향 매칭</b></div>
-      <a class="button" href="posts.html">모집 게시판</a>
+      <div class="actions"><a class="button" href="index.html">홈</a><a class="button" href="posts.html">모집 게시판</a></div>
     </div>
   </header>
 
   <main class="shell">
     <div class="hero">
       <h1>관리자 페이지</h1>
-      <p class="muted">시연 모드에서는 이 브라우저에 저장된 모집 글을 관리할 수 있어요.</p>
+      <p class="muted">모집 글의 상태와 숨김·복구 처리 이력을 관리해요.</p>
     </div>
 
+    <p class="feedback" id="accessMessage" role="status">관리자 권한을 확인하고 있어요.</p>
+    <button class="button" id="retryAccess" type="button" hidden>다시 시도하기</button>
     <div id="workspace" hidden>
       <dl class="stats" aria-label="모집 현황">
         <div><dt>전체 글</dt><dd id="totalCount">0</dd></div>
@@ -158,75 +160,26 @@
     </form>
   </dialog>
 
-  <script>
+  <script type="module">
     "use strict";
 
+    import {
+      requireAdmin, adminListPosts, adminListHistory, adminSetStatus, adminSetVisibility,
+    } from "./firebase.js";
+
     const byId = id => document.getElementById(id);
-    const POSTS_KEY = "roommate-posts-demo-v1";
-    const HISTORY_KEY = "roommate-moderation-history-demo-v1";
     const STATUS = { open: "모집 중", closed: "모집 마감" };
     const isHidden = post => post.moderation?.hidden === true;
     const historyDate = new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "medium" });
     let posts = [];
     let selectedPost = null;
 
-    function readDemoPosts() {
-      const saved = JSON.parse(localStorage.getItem(POSTS_KEY));
-      if (saved === null) return [];
-      if (!Array.isArray(saved)) throw new Error("Invalid posts storage");
-      return saved;
-    }
-
-    function parseDemoHistory(raw) {
-      const saved = JSON.parse(raw);
-      if (saved === null) return [];
-      if (!Array.isArray(saved)) throw new Error("Invalid moderation history");
-      return saved;
-    }
-
-    // 로그인 연동 시 initialize()에서 인증 상태를 확인한 뒤 화면을 표시합니다.
-    // 서버에서 관리자 권한을 검증하고, 표시 상태 변경과 이력 저장을 한 트랜잭션으로 처리합니다.
-    // 이력의 관리자 ID와 처리 시각은 서버가 확정합니다.
+    // 권한 검증과 상태 변경·이력 저장 트랜잭션은 Firebase 공통 모듈에서 처리합니다.
     const adminPosts = {
-      async list() {
-        return readDemoPosts().filter(post =>
-          typeof post?.id === "string" && (post.status === "open" || post.status === "closed"));
-      },
-      async listHistory() {
-        return parseDemoHistory(localStorage.getItem(HISTORY_KEY));
-      },
-      async setStatus(id, expectedStatus, nextStatus) {
-        const saved = readDemoPosts();
-        const index = saved.findIndex(post => post?.id === id && post.status === expectedStatus && !isHidden(post));
-        if (index < 0) return false;
-        saved[index] = { ...saved[index], status: nextStatus, updatedAt: new Date().toISOString() };
-        localStorage.setItem(POSTS_KEY, JSON.stringify(saved));
-        return true;
-      },
-      async setVisibility(post, hidden, reason) {
-        const saved = readDemoPosts();
-        const index = saved.findIndex(current => current?.id === post.id &&
-          isHidden(current) === isHidden(post) && current.moderation?.processedAt === post.moderation?.processedAt);
-        if (index < 0) return false;
-        const current = saved[index];
-        const processedAt = new Date().toISOString();
-        const moderation = { hidden, hideReason: hidden ? reason : saved[index].moderation?.hideReason,
-          restoreReason: hidden ? undefined : reason, processedAt };
-        saved[index] = { ...current, moderation };
-        const before = localStorage.getItem(HISTORY_KEY);
-        const history = parseDemoHistory(before);
-        history.unshift({ postId: current.id, title: current.title || "(제목 없음)",
-          action: hidden ? "hide" : "restore", reason, processedAt });
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-        try {
-          localStorage.setItem(POSTS_KEY, JSON.stringify(saved));
-        } catch (error) {
-          if (before === null) localStorage.removeItem(HISTORY_KEY);
-          else localStorage.setItem(HISTORY_KEY, before);
-          throw error;
-        }
-        return true;
-      }
+      list: () => adminListPosts(),
+      listHistory: () => adminListHistory(),
+      setStatus: (id, expectedStatus, nextStatus) => adminSetStatus(id, expectedStatus, nextStatus),
+      setVisibility: (post, hidden, reason) => adminSetVisibility(post, hidden, reason)
     };
 
     function textElement(tag, text, className) {
@@ -258,6 +211,7 @@
             time.dateTime = entry.processedAt;
             meta.append(textElement("span", hidden ? "숨김" : "복구", hidden ? "tag removed" : "tag"), time);
             row.append(textElement("strong", entry.title), meta, textElement("p", entry.reason, "history-reason"));
+            if (entry.adminId) row.append(textElement("small", `처리자 ID: ${entry.adminId}`, "muted"));
             return row;
           });
         list.replaceChildren(...rows);
@@ -347,7 +301,7 @@
       byId("resultCount").textContent = `${visible.length}개의 모집 글`;
       byId("empty").hidden = visible.length > 0;
       byId("empty").textContent = posts.length ? "조건에 맞는 모집 글이 없어요."
-        : "저장된 모집 글이 없어요. 게시판에서 글을 작성하면 여기에 표시돼요.";
+        : "등록된 모집 글이 없어요.";
       byId("postList").replaceChildren(...visible.map(createPostRow));
     }
 
@@ -360,7 +314,7 @@
         posts = [];
         render();
         byId("empty").hidden = true;
-        feedback("모집 글을 불러오지 못했어요. 브라우저 저장 설정을 확인해 주세요.", true);
+        feedback("모집 글을 불러오지 못했어요. 연결을 확인하고 새로고침해 주세요.", true);
       }
     }
 
@@ -429,17 +383,46 @@
       byId("moderationDialog").addEventListener("cancel", event => {
         if (byId("moderationSubmit").disabled) event.preventDefault();
       });
-      window.addEventListener("pageshow", () => {
-        refresh();
-        if (!byId("historyPanel").hidden) refreshHistory();
-      });
-      window.addEventListener("storage", event => {
-        if (event.key === POSTS_KEY || event.key === null) refresh();
-        if ((event.key === HISTORY_KEY || event.key === null) && !byId("historyPanel").hidden) refreshHistory();
-      });
     }
 
-    initialize();
+    let initialized = false;
+    let checkingAccess = false;
+    async function loadAdmin() {
+      if (checkingAccess) return;
+      checkingAccess = true;
+      byId("workspace").hidden = true;
+      byId("retryAccess").hidden = true;
+      const message = byId("accessMessage");
+      message.classList.remove("error");
+      message.textContent = "관리자 권한을 확인하고 있어요.";
+      try {
+        await requireAdmin();
+        if (!initialized) {
+          initialize();
+          initialized = true;
+        }
+        byId("workspace").hidden = false;
+        message.textContent = "";
+        await refresh();
+        if (!byId("historyPanel").hidden) await refreshHistory();
+      } catch {
+        message.classList.add("error");
+        message.textContent = "관리자 권한을 확인하지 못했어요. 연결을 확인하고 다시 시도해 주세요.";
+        byId("retryAccess").hidden = false;
+      } finally {
+        checkingAccess = false;
+      }
+    }
+
+    byId("retryAccess").addEventListener("click", loadAdmin);
+    window.addEventListener("pageshow", event => {
+      if (event.persisted) loadAdmin();
+    });
+    window.addEventListener("pagehide", () => {
+      byId("workspace").hidden = true;
+      if (byId("moderationDialog").open) byId("moderationDialog").close();
+    });
+    await loadAdmin();
   </script>
 </body>
 </html>
