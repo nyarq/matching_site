@@ -184,6 +184,8 @@ a.btn { display: inline-block; text-decoration: none; text-align: center; }
         <button class="btn ghost" id="sampleBtn">예시 결과 보기</button>
       </div>
       <p class="note">약 5분 소요 · 결과는 내 계정에 저장돼요</p>
+      <p class="note" id="savedResultMessage" role="status" hidden></p>
+      <button class="btn ghost" id="retryResultBtn" type="button" hidden>결과 다시 불러오기</button>
     </div>
   </section>
   <section class="main">
@@ -213,7 +215,7 @@ a.btn { display: inline-block; text-decoration: none; text-align: center; }
 <div id="result" hidden></div>
 
 <script type="module">
-import { requireLogin, saveSurvey, listSurveys } from "./firebase.js";
+import { requireLogin, saveSurvey, listSurveys, loadMySurvey } from "./firebase.js";
 
 // 로그인 안 했으면 index.html로 갔다가 로그인 후 다시 이 페이지로 돌아옴
 const user = await requireLogin();
@@ -556,7 +558,7 @@ async function loadRecommendations(res, info) {
   }
 }
 
-function renderResult(answers, info, isSample) {
+function renderResult(answers, info, isSample, saveResult = true) {
   const res = analyze(answers);
   const by = Object.fromEntries(res.map(x => [x.a.key, x]));
   const code = res.slice(0, 4).map(x => x.pole.code).join("") + "-" + res[4].pole.code;
@@ -614,8 +616,13 @@ function renderResult(answers, info, isSample) {
   });
   show("#result");
   if (!isSample) {
-    // 내 결과를 먼저 저장한 뒤 추천을 불러옴
-    storeResult(answers, info, code).then(() => loadRecommendations(res, info));
+    if (saveResult) {
+      // 새 검사를 마칠 때만 결과를 저장합니다.
+      storeResult(answers, info, code).then(() => loadRecommendations(res, info));
+    } else {
+      $("#saveMsg").textContent = "내 계정에 저장된 검사 결과예요.";
+      void loadRecommendations(res, info);
+    }
   }
 }
 
@@ -651,6 +658,54 @@ $("#nextBtn").addEventListener("click", () => {
 load();
 
 renderIntro();
+
+const requestedView = new URLSearchParams(location.search).get("view");
+let loadingSavedResult = false;
+function isAnswer(value) {
+  return Number.isInteger(value) && value >= 1 && value <= LIKERT.length;
+}
+
+async function openRequestedView() {
+  if (loadingSavedResult || !["result", "resume"].includes(requestedView)) return;
+  loadingSavedResult = true;
+  const message = $("#savedResultMessage");
+  message.hidden = false;
+  message.textContent = "저장된 검사 정보를 불러오고 있어요…";
+  $("#retryResultBtn").hidden = true;
+  $("#startBtn").disabled = $("#sampleBtn").disabled = true;
+  try {
+    const saved = await loadMySurvey();
+    const answers = saved?.answers || {};
+    const info = saved?.info || {};
+    const complete = QUESTIONS.every((_, index) => isAnswer(answers[index])) &&
+      INFO.every(field => field.options.includes(info[field.key]));
+    if (complete && requestedView === "result") {
+      renderResult(answers, info, false, false);
+    } else if (requestedView === "resume") {
+      // 계정에 저장된 유효한 응답만 사용합니다.
+      state.answers = Object.fromEntries(QUESTIONS.map((_, index) => [index, answers[index]])
+        .filter(([, value]) => isAnswer(value)));
+      state.info = Object.fromEntries(INFO.filter(field => field.options.includes(info[field.key]))
+        .map(field => [field.key, info[field.key]]));
+      const missing = QUESTIONS.findIndex((_, index) => !isAnswer(state.answers[index]));
+      state.step = missing < 0 ? QPAGES : Math.floor(missing / PER_PAGE);
+      show("#quiz");
+      renderStep();
+    } else {
+      message.textContent = "완료된 검사 결과가 없어요. 검사를 진행해 주세요.";
+    }
+  } catch (error) {
+    console.error(error);
+    message.textContent = "검사 결과를 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요.";
+    $("#retryResultBtn").hidden = false;
+  } finally {
+    loadingSavedResult = false;
+    $("#startBtn").disabled = $("#sampleBtn").disabled = false;
+  }
+}
+
+$("#retryResultBtn").addEventListener("click", openRequestedView);
+await openRequestedView();
 </script>
 </body>
 </html>

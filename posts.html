@@ -258,6 +258,7 @@
     const requestedPostId = pageParams.get("post")?.trim() || "";
     const requestedCompose = pageParams.get("compose") === "1";
     let initialUrlHandled = false;
+    let resolvingPostLink = false;
     let posts = [];
     let editingId = null;
     let activePostId = null;
@@ -277,16 +278,25 @@
       byId(id).classList.toggle("hidden", !message);
     }
 
-    function handleInitialUrl() {
-      if (initialUrlHandled || !user) return;
-      // The complete Firestore list includes closed posts regardless of UI filters.
-      // Wait for its first successful load before resolving a post link.
+    async function handleInitialUrl() {
+      if (initialUrlHandled || resolvingPostLink || !user) return;
       if (hasRequestedPost) {
         if (loading) return;
-        initialUrlHandled = true;
-        const post = posts.find(p => p.id === requestedPostId && isVisible(p));
-        if (post) showDetail(post.id);
-        else feedback("linkFeedback", "요청한 게시글이 삭제되었거나 접근할 수 없습니다. 다른 게시글을 확인해 주세요.");
+        resolvingPostLink = true;
+        try {
+          // 첫 목록은 캐시의 일부일 수 있으므로 문서를 직접 확인합니다.
+          const post = requestedPostId ? await getPost(requestedPostId) : null;
+          initialUrlHandled = true;
+          if (post && isVisible(post)) {
+            posts = [post, ...posts.filter(item => item.id !== post.id)];
+            feedback("linkFeedback", "");
+            showDetail(post.id);
+          } else feedback("linkFeedback", "요청한 게시글이 삭제되었거나 접근할 수 없습니다. 다른 게시글을 확인해 주세요.");
+        } catch (error) {
+          feedback("linkFeedback", "게시글을 확인하지 못했습니다. " + failureMessage(error) + " 자동으로 다시 확인합니다.");
+        } finally {
+          resolvingPostLink = false;
+        }
       } else {
         initialUrlHandled = true;
         if (requestedCompose) openEditor(null);
@@ -335,7 +345,6 @@
       boardError = "";
       renderPosts();
       syncDialogs();
-      handleInitialUrl();
     }
 
     // watchPosts has no error callback. Periodic reads also surface read failures
@@ -344,7 +353,10 @@
       const startedAt = revision;
       try {
         const list = await listPosts();
-        if (token === generation && startedAt === revision) acceptPosts(list);
+        if (token !== generation) return;
+        if (startedAt === revision) acceptPosts(list);
+        // 구독 응답 때문에 목록 읽기가 생략돼도 상세 링크는 문서 조회로 처리합니다.
+        await handleInitialUrl();
       } catch (error) {
         if (token !== generation || startedAt !== revision) return;
         loading = false;
