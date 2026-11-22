@@ -634,7 +634,7 @@
         }
         const url = new URL(CHAT_PAGE, location.href);
         const response = await fetch(url, { method: "GET", cache: "no-store" });
-        if (!response.ok || new URL(response.url).pathname !== url.pathname) throw new Error("Chat page unavailable");
+        if (!response.ok) throw new Error("Chat page unavailable");
         const html = await response.text();
         if (!/<html[\s>]/i.test(html)) throw new Error("Chat page unavailable");
         // Contract: chat.html reads `with` (author UID) and `post` (post document ID).
