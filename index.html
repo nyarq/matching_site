@@ -187,10 +187,11 @@ const $ = (id) => document.getElementById(id);
 const loginForm = $("loginForm");
 const signupForm = $("signupForm");
 
-// 로그인 후 돌아갈 페이지 (같은 사이트의 .html 파일만 허용)
+// 로그인 후 돌아갈 페이지 (같은 사이트의 페이지 이름만 허용)
+// Cloudflare Pages는 .html을 떼고 /survey 처럼 보내므로 .html은 있어도 없어도 허용
 function nextPage() {
   const next = new URLSearchParams(location.search).get("next");
-  return next && /^[\w-]+\.html(\?.*)?$/.test(next) ? next : null;
+  return next && /^[\w-]+(\.html)?(\?.*)?$/.test(next) ? next : null;
 }
 
 function showTab(which) {
